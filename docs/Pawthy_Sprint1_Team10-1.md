@@ -278,7 +278,8 @@ The initial release has no third-party authentication or scheduling integration.
 
 ## 2.7 System Context Diagram
 
-![System context diagram](system-context-diagram.png)
+![Pawthy System context diagram]
+(system-context-diagram.png)
 
 *Figure 1. Single-clinic system context. Pet Owner and Veterinarian/Administrator are external actors. The Pet Health Portal is the system boundary; its database and web interface are internal implementation details.*
 
