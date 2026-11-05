@@ -1,0 +1,2628 @@
+openapi: 3.1.0
+info:
+  title: Pawthy — Pet Health Portal API
+  version: 0.3.0
+  description: 'Draft API-first contract for SENG 321 Sprint 1. Single clinic and one veterinarian/administrator.
+    Pet owners submit appointment requests which always begin in PENDING_APPROVAL; the veterinarian alone approves
+    or rejects them. Confirmation is never automatic. Availability is checked at submission and again at approval
+    to prevent double booking. Pending-request time-slot hold policy remains to be agreed with the implementation
+    team. Owner accounts can have multiple pets, each with a visit reason. Veterinary records are veterinarian-controlled;
+    owner observations are owner-managed. All notifications are website-only. No billing, external SMS/email, or
+    automated diagnosis. Bearer authentication and endpoint conventions are provisional and require backend-team
+    review. These are proposed API contracts, not implemented endpoints. v0.3.0: schema-enforced OTHER names and
+    diary-entry minimum content, nullable next_due_date, unavailable-period list/update/delete, notification mark-read,
+    and specific 409 conflict responses.'
+servers:
+- url: /api/v1
+  description: Proposed Django API prefix (subject to team confirmation)
+tags:
+- name: Authentication
+- name: Owner Accounts
+- name: Pets
+- name: Diary
+- name: Medical Records
+- name: Vaccinations
+- name: Reminders
+- name: Scheduling
+- name: Appointments
+- name: Notifications
+- name: Preferences
+- name: Clinic
+security:
+- bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags:
+      - Authentication
+      operationId: login
+      summary: Log in with assigned credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated (first login may require password change)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResult'
+              example:
+                access_token: example-token
+                must_change_password: true
+                role: PET_OWNER
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      security: []
+  /auth/change-password:
+    post:
+      tags:
+      - Authentication
+      operationId: changeFirstPassword
+      summary: Change password, including required first-login change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Successful operation
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pet-owners:
+    post:
+      tags:
+      - Owner Accounts
+      operationId: createPetOwner
+      summary: Veterinarian creates a pet-owner account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAccountRequest'
+      responses:
+        '201':
+          description: Account created; temporary password returned once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerProvisioned'
+              example:
+                owner:
+                  id: owner-1
+                  full_name: Ayse Demir
+                  email: owner@example.com
+                temporary_password: shown-once-example
+                shown_once: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/EmailAlreadyExists'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    get:
+      tags:
+      - Owner Accounts
+      operationId: listPetOwners
+      summary: List pet owners for veterinarian dashboard
+      responses:
+        '200':
+          description: List of owner accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /species:
+    get:
+      tags:
+      - Pets
+      operationId: listSpecies
+      summary: List common pet species, with Other option
+      responses:
+        '200':
+          description: Species catalogue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeciesList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /pets:
+    get:
+      tags:
+      - Pets
+      operationId: listAccessiblePets
+      summary: List pets available to current user
+      responses:
+        '200':
+          description: Pets belonging to current owner or assigned clinic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /pet-owners/{ownerId}/pets:
+    post:
+      tags:
+      - Pets
+      operationId: createPetProfile
+      summary: Veterinarian adds a pet under an owner account
+      parameters:
+      - name: ownerId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPet'
+      responses:
+        '201':
+          description: Pet created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}:
+    get:
+      tags:
+      - Pets
+      operationId: getPetProfile
+      summary: View pet profile
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      responses:
+        '200':
+          description: Pet profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+      - Pets
+      operationId: updateVeterinaryPetProfile
+      summary: Veterinarian updates veterinary-controlled pet profile fields
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VetPetUpdate'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/personal-details:
+    get:
+      tags:
+      - Pets
+      operationId: getPersonalPetDetails
+      summary: Owner views their private pet notes
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      responses:
+        '200':
+          description: Owner-only notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetPersonalDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+      - Pets
+      operationId: updatePersonalPetDetails
+      summary: Owner edits their private pet notes
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetPersonalDetails'
+      responses:
+        '200':
+          description: Owner-only notes updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetPersonalDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/archive:
+    patch:
+      tags:
+      - Pets
+      operationId: archivePetForOwner
+      summary: Owner archives or restores a pet in personal list
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetArchiveRequest'
+      responses:
+        '200':
+          description: Archive visibility updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{petId}/photos:
+    get:
+      tags:
+      - Pets
+      operationId: listPersonalPetPhotos
+      summary: Owner lists their private pet photos
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      responses:
+        '200':
+          description: Private photo gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetPhotoList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - Pets
+      operationId: uploadPersonalPetPhoto
+      summary: Owner uploads a personal pet photo
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+              required:
+              - image
+      responses:
+        '201':
+          description: Photo uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetPhoto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/photos/{photoId}:
+    delete:
+      tags:
+      - Pets
+      operationId: deletePersonalPetPhoto
+      summary: Owner deletes one personal pet photo
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      - name: photoId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Successful operation
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{petId}/clinical-photo:
+    put:
+      tags:
+      - Pets
+      operationId: uploadClinicalPetPhoto
+      summary: Veterinarian uploads or replaces the clinical identification photo
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+              required:
+              - image
+      responses:
+        '200':
+          description: Pet photo updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/observations:
+    get:
+      tags:
+      - Diary
+      operationId: listObservations
+      summary: Review diary entries for an authorized pet
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      responses:
+        '200':
+          description: Chronological entries; filtering and sorting decided during implementation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - Diary
+      operationId: createObservation
+      summary: Owner records an optional, symptom-focused observation
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObservationInput'
+      responses:
+        '201':
+          description: Observation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Observation'
+              example:
+                id: obs-1
+                pet_id: pet-1
+                created_by_owner_id: owner-1
+                observed_at: '2026-11-02T10:30:00+03:00'
+                observations:
+                - category: DIGESTIVE
+                  symptom: Diarrhea
+                normal_no_concerns: false
+                notes: Soft stool this morning.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/observations/{observationId}:
+    patch:
+      tags:
+      - Diary
+      operationId: updateObservation
+      summary: Owner edits an observation they created
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      - name: observationId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObservationUpdate'
+      responses:
+        '200':
+          description: Observation updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Observation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      description: Returns 422 if the edited entry would have no observation item, no Normal / No Concerns flag
+        and no note.
+    delete:
+      tags:
+      - Diary
+      operationId: deleteObservation
+      summary: Owner deletes an observation they created
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      - name: observationId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Successful operation
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{petId}/observation-statistics:
+    get:
+      tags:
+      - Diary
+      operationId: getObservationStatistics
+      summary: Symptom frequency and timeline for authorized user
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      - name: from_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Owner-reported symptom counts and timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiaryStatistics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{petId}/medical-records:
+    get:
+      tags:
+      - Medical Records
+      operationId: listMedicalRecords
+      summary: View veterinary medical history (read-only for owners)
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      responses:
+        '200':
+          description: Most recent first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - Medical Records
+      operationId: createMedicalRecord
+      summary: Veterinarian documents a visit
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordInput'
+      responses:
+        '201':
+          description: Medical record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/medical-records/{recordId}:
+    patch:
+      tags:
+      - Medical Records
+      operationId: updateMedicalRecord
+      summary: Veterinarian updates a clinical record
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      - name: recordId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordUpdate'
+      responses:
+        '200':
+          description: Medical record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /species/{speciesCode}/vaccines:
+    get:
+      tags:
+      - Vaccinations
+      operationId: listSuggestedVaccineNames
+      summary: List preloaded vaccine names for a common species; Other/manual allowed
+      parameters:
+      - name: speciesCode
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Vaccine name catalogue (not a medical recommendation)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaccineCatalog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{petId}/vaccinations:
+    get:
+      tags:
+      - Vaccinations
+      operationId: listVaccinations
+      summary: View vaccination history
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      responses:
+        '200':
+          description: Vaccination records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaccinationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - Vaccinations
+      operationId: createVaccination
+      summary: Veterinarian records an administered vaccine and optional next due date
+      description: previous_vaccination_id, when provided, marks the associated old reminder Completed; an optional
+        next_due_date schedules the next reminder.
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaccinationInput'
+      responses:
+        '201':
+          description: Vaccination recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaccinationRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /pets/{petId}/vaccinations/{vaccinationId}:
+    patch:
+      tags:
+      - Vaccinations
+      operationId: updateVaccination
+      summary: Veterinarian updates vaccination data and reminder due date
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID of a pet authorized for the current user.
+      - name: vaccinationId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaccinationUpdate'
+      responses:
+        '200':
+          description: Vaccination updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaccinationRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      description: 'Sending next_due_date: null clears the reminder for this vaccination without deleting the record.'
+  /vaccination-reminders:
+    get:
+      tags:
+      - Reminders
+      operationId: listVaccinationReminders
+      summary: List in-app vaccination reminders visible to current role
+      description: Visible from 7 days before manually-entered due date through overdue state; completed and deceased-pet
+        reminders are not active.
+      responses:
+        '200':
+          description: Owner sees own pets; veterinarian sees clinic-wide list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /veterinarian/schedule:
+    get:
+      tags:
+      - Scheduling
+      operationId: getWeeklySchedule
+      summary: Get recurring weekly working periods
+      responses:
+        '200':
+          description: Weekly schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklySchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags:
+      - Scheduling
+      operationId: setWeeklySchedule
+      summary: Veterinarian changes weekly working hours
+      description: Does not automatically cancel or reschedule existing appointments.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeeklySchedule'
+      responses:
+        '200':
+          description: Schedule replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklySchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /veterinarian/unavailable-periods:
+    post:
+      tags:
+      - Scheduling
+      operationId: blockUnavailablePeriod
+      summary: Veterinarian blocks an unavailable period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnavailablePeriodInput'
+      responses:
+        '201':
+          description: Unavailable period created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnavailablePeriod'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/UnavailablePeriodOverlap'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    get:
+      tags:
+      - Scheduling
+      operationId: listUnavailablePeriods
+      summary: Veterinarian lists blocked unavailable periods
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Only periods ending after this time.
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Only periods starting before this time.
+      responses:
+        '200':
+          description: Blocked periods, earliest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnavailablePeriodList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /veterinarian/unavailable-periods/{periodId}:
+    patch:
+      tags:
+      - Scheduling
+      operationId: updateUnavailablePeriod
+      summary: Veterinarian updates a blocked period
+      description: Existing appointments are not automatically cancelled or rescheduled when a blocked period changes.
+      parameters:
+      - &id001
+        name: periodId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnavailablePeriodUpdate'
+      responses:
+        '200':
+          description: Period updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnavailablePeriod'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/UnavailablePeriodOverlap'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags:
+      - Scheduling
+      operationId: deleteUnavailablePeriod
+      summary: Veterinarian removes a blocked period
+      description: Frees the interval for new availability searches. Existing appointments are unaffected.
+      parameters:
+      - *id001
+      responses:
+        '204':
+          description: Successful operation
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /appointment-types:
+    get:
+      tags:
+      - Scheduling
+      operationId: listAppointmentTypes
+      summary: List veterinarian-configured appointment durations
+      responses:
+        '200':
+          description: Appointment type configurations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentTypeList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /appointment-types/{code}:
+    put:
+      tags:
+      - Scheduling
+      operationId: configureAppointmentType
+      summary: Veterinarian sets nominal duration and plus/minus tolerance
+      description: Rejects standard duration under 10 minutes. Reserved duration is the upper estimate; updates
+        do not retroactively change booked appointments.
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - ROUTINE_CHECKUP
+          - VACCINATION
+          - ILLNESS
+          - FOLLOW_UP
+          - OTHER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentType'
+      responses:
+        '200':
+          description: Appointment type configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /appointment-slots/search:
+    post:
+      tags:
+      - Scheduling
+      operationId: searchAppointmentSlots
+      summary: Find a continuous free interval for all selected pets
+      description: Read-only availability search using POST for a multi-pet query. Slot results are estimates, not
+        a booking guarantee. Approval rechecks availability. Policy for temporarily holding pending requests is
+        not yet fixed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentSearchRequest'
+      responses:
+        '200':
+          description: Slots that fit the sum of upper estimated durations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentSlotList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /appointments:
+    get:
+      tags:
+      - Appointments
+      operationId: listAppointments
+      summary: List appointments visible to current role
+      responses:
+        '200':
+          description: Owner views own bookings; vet views clinic bookings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+      - Appointments
+      operationId: submitAppointmentRequest
+      summary: Submit an appointment request for one or more pets (requires veterinarian approval)
+      description: Submission creates an appointment request in PENDING_APPROVAL, never a confirmed appointment.
+        An owner may include multiple pets with individual visit reasons/notes. Total estimated durations and tolerances
+        are summed and availability is checked against confirmed bookings and blocked periods. Veterinarian approval
+        must recheck conflicts; the policy for holding slots while pending is TBD.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewAppointment'
+      responses:
+        '201':
+          description: Appointment request created with status PENDING_APPROVAL; veterinary approval required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+              example:
+                id: appt-1
+                owner_id: owner-1
+                starts_at: '2026-11-05T10:00:00+03:00'
+                reserved_minutes: 75
+                estimated_min_minutes: 35
+                estimated_max_minutes: 75
+                status: PENDING_APPROVAL
+                pets:
+                - pet_id: pet-1
+                  visit_type: ILLNESS
+                  notes: Vomiting for two days.
+                - pet_id: pet-2
+                  visit_type: VACCINATION
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/SlotUnavailable'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /appointments/{appointmentId}:
+    get:
+      tags:
+      - Appointments
+      operationId: getAppointment
+      summary: View appointment details
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+      - Appointments
+      operationId: manageAppointment
+      summary: Veterinarian cancels or reschedules an appointment
+      description: Only veterinarian can cancel or reschedule confirmed appointments. Rescheduling checks the entire
+        reserved duration. Owner receives an in-app cancellation or update notification. Approval/rejection of pending
+        requests uses the dedicated decision operation. This operation can never approve, reject or create appointments;
+        owners receive 403.
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageAppointmentRequest'
+      responses:
+        '200':
+          description: Appointment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/AppointmentConflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /notifications:
+    get:
+      tags:
+      - Notifications
+      operationId: listOwnerNotifications
+      summary: Owner views website-only appointment status and update notices
+      responses:
+        '200':
+          description: In-app approval, rejection, rescheduling and cancellation notifications for current owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /notifications/{notificationId}:
+    patch:
+      tags:
+      - Notifications
+      operationId: markNotificationRead
+      summary: Mark one notification as read or unread
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationReadUpdate'
+            examples:
+              markRead:
+                value:
+                  read: true
+      responses:
+        '200':
+          description: Notification updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /me/theme:
+    get:
+      tags:
+      - Preferences
+      operationId: getTheme
+      summary: Get saved theme for current user
+      responses:
+        '200':
+          description: Current user theme
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemePreference'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags:
+      - Preferences
+      operationId: setTheme
+      summary: Save manual Light/Dark theme preference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThemePreference'
+      responses:
+        '200':
+          description: Preference saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemePreference'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /clinic/contact:
+    get:
+      tags:
+      - Clinic
+      operationId: getClinicContact
+      summary: View clinic contact and urgent phone number
+      responses:
+        '200':
+          description: Clinic contact details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicContact'
+      security: []
+    patch:
+      tags:
+      - Clinic
+      operationId: setClinicContact
+      summary: Veterinarian updates clinic contact details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicContact'
+      responses:
+        '200':
+          description: Contact details updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicContact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /appointments/{appointmentId}/decision:
+    post:
+      tags:
+      - Appointments
+      operationId: decideAppointmentRequest
+      summary: Veterinarian approves or rejects a pending appointment request
+      description: Veterinarian/administrator only. APPROVE is valid only when status is PENDING_APPROVAL; it atomically
+        rechecks the complete required interval against confirmed bookings and blocked periods. A conflict returns
+        409 with no approval. REJECT sets status REJECTED. Either decision creates a website-only owner notification.
+        No automatic confirmation occurs.
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentDecisionRequest'
+            examples:
+              approve:
+                value:
+                  decision: APPROVE
+              reject:
+                value:
+                  decision: REJECT
+      responses:
+        '200':
+          description: Request accepted or rejected; owner receives an in-app status notification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+              examples:
+                approved:
+                  value:
+                    id: appt-1
+                    owner_id: owner-1
+                    starts_at: '2026-11-05T10:00:00+03:00'
+                    reserved_minutes: 75
+                    estimated_min_minutes: 35
+                    estimated_max_minutes: 75
+                    status: CONFIRMED
+                    pets:
+                    - pet_id: pet-1
+                      visit_type: ILLNESS
+                rejected:
+                  value:
+                    id: appt-1
+                    owner_id: owner-1
+                    starts_at: '2026-11-05T10:00:00+03:00'
+                    reserved_minutes: 75
+                    estimated_min_minutes: 35
+                    estimated_max_minutes: 75
+                    status: REJECTED
+                    pets:
+                    - pet_id: pet-1
+                      visit_type: ILLNESS
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/AppointmentConflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Proposed API authentication; final Django authentication scheme to be agreed.
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: owner@example.com
+        password:
+          type: string
+          format: password
+      required:
+      - email
+      - password
+    LoginResult:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: Session/API access token.
+        must_change_password:
+          type: boolean
+          example: true
+        role:
+          type: string
+          enum:
+          - PET_OWNER
+          - VETERINARIAN
+      required:
+      - access_token
+      - must_change_password
+      - role
+    ChangePasswordRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+      required:
+      - current_password
+      - new_password
+    OwnerAccountRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          example: Ayse Demir
+        email:
+          type: string
+          format: email
+          example: owner@example.com
+      required:
+      - full_name
+      - email
+    OwnerAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          example: owner-1
+        full_name:
+          type: string
+        email:
+          type: string
+          format: email
+      required:
+      - id
+      - full_name
+      - email
+    OwnerProvisioned:
+      type: object
+      properties:
+        owner:
+          $ref: '#/components/schemas/OwnerAccount'
+        temporary_password:
+          type: string
+          description: Returned only once to the veterinarian for in-person handover; never returned in normal account
+            reads.
+        shown_once:
+          type: boolean
+          const: true
+      required:
+      - owner
+      - temporary_password
+      - shown_once
+    OwnerList:
+      type: array
+      items:
+        $ref: '#/components/schemas/OwnerAccount'
+    SpeciesOption:
+      type: object
+      properties:
+        code:
+          type: string
+          example: CAT
+        display_name:
+          type: string
+          example: Cat
+        supports_predefined_vaccines:
+          type: boolean
+      required:
+      - code
+      - display_name
+      - supports_predefined_vaccines
+    SpeciesList:
+      type: array
+      items:
+        $ref: '#/components/schemas/SpeciesOption'
+    NewPet:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Luna
+        species_code:
+          type: string
+          example: CAT
+          description: Use OTHER for species outside predefined choices.
+        other_species_name:
+          type: string
+          description: Required (non-blank) when species_code is OTHER.
+          pattern: \S
+          minLength: 1
+        breed:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        estimated_age_months:
+          type: integer
+          minimum: 0
+        sex:
+          type: string
+          enum:
+          - FEMALE
+          - MALE
+          - UNKNOWN
+        microchip_number:
+          type: string
+      required:
+      - name
+      - species_code
+      - sex
+      allOf:
+      - if:
+          properties:
+            species_code:
+              const: OTHER
+          required:
+          - species_code
+        then:
+          required:
+          - other_species_name
+    VetPetUpdate:
+      type: object
+      description: Veterinarian-controlled identity and clinical-status fields only.
+      properties:
+        name:
+          type: string
+        species_code:
+          type: string
+        other_species_name:
+          type: string
+          pattern: \S
+          minLength: 1
+          description: Required (non-blank) when species_code is OTHER.
+        breed:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        estimated_age_months:
+          type: integer
+          minimum: 0
+        sex:
+          type: string
+          enum:
+          - FEMALE
+          - MALE
+          - UNKNOWN
+        microchip_number:
+          type: string
+        clinical_status:
+          type: string
+          enum:
+          - ACTIVE
+          - DECEASED
+          - NO_LONGER_AT_CLINIC
+      allOf:
+      - if:
+          properties:
+            species_code:
+              const: OTHER
+          required:
+          - species_code
+        then:
+          required:
+          - other_species_name
+    Pet:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pet-1
+        owner_id:
+          type: string
+          example: owner-1
+        name:
+          type: string
+          example: Luna
+        species_code:
+          type: string
+          example: CAT
+        other_species_name:
+          type: string
+        breed:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        estimated_age_months:
+          type: integer
+        sex:
+          type: string
+          enum:
+          - FEMALE
+          - MALE
+          - UNKNOWN
+        microchip_number:
+          type: string
+        clinical_photo_url:
+          type: string
+          format: uri
+        clinical_status:
+          type: string
+          enum:
+          - ACTIVE
+          - DECEASED
+          - NO_LONGER_AT_CLINIC
+        archived_by_owner:
+          type: boolean
+          default: false
+      required:
+      - id
+      - owner_id
+      - name
+      - species_code
+      - sex
+      - clinical_status
+      - archived_by_owner
+    PetList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Pet'
+    PetPersonalDetails:
+      type: object
+      properties:
+        personal_notes:
+          type: string
+          description: Owner-only notes. Not returned to the veterinarian.
+    PetArchiveRequest:
+      type: object
+      properties:
+        archived:
+          type: boolean
+      required:
+      - archived
+    PetPhoto:
+      type: object
+      properties:
+        id:
+          type: string
+        pet_id:
+          type: string
+        image_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - pet_id
+      - image_url
+      - created_at
+    PetPhotoList:
+      type: array
+      items:
+        $ref: '#/components/schemas/PetPhoto'
+    ObservationItem:
+      type: object
+      properties:
+        category:
+          type: string
+          enum:
+          - DIGESTIVE
+          - EATING_DRINKING
+          - ENERGY_BEHAVIOR
+          - SKIN_PHYSICAL
+          - OTHER
+        symptom:
+          type: string
+          example: Diarrhea
+      required:
+      - category
+      - symptom
+    ObservationInput:
+      type: object
+      description: At least one observation item, normal_no_concerns=true, or a nonblank note must be supplied.
+        Multiple entries per pet/day allowed.
+      properties:
+        observed_at:
+          type: string
+          format: date-time
+          example: '2026-11-02T10:30:00+03:00'
+        observations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObservationItem'
+        normal_no_concerns:
+          type: boolean
+          default: false
+        notes:
+          type: string
+          example: Soft stool this morning; drank less water.
+      required:
+      - observed_at
+      anyOf:
+      - required:
+        - observations
+        properties:
+          observations:
+            minItems: 1
+      - required:
+        - normal_no_concerns
+        properties:
+          normal_no_concerns:
+            const: true
+      - required:
+        - notes
+        properties:
+          notes:
+            pattern: \S
+    ObservationUpdate:
+      type: object
+      description: Partial owner edit; only provided fields change. After applying the change the entry must still
+        contain at least one observation item, normal_no_concerns=true, or a nonblank note; otherwise 422.
+      properties:
+        observed_at:
+          type: string
+          format: date-time
+          example: '2026-11-02T10:30:00+03:00'
+        observations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObservationItem'
+        normal_no_concerns:
+          type: boolean
+          default: false
+        notes:
+          type: string
+          example: Soft stool this morning; drank less water.
+    Observation:
+      type: object
+      properties:
+        id:
+          type: string
+          example: obs-1
+        pet_id:
+          type: string
+          example: pet-1
+        created_by_owner_id:
+          type: string
+          example: owner-1
+        observed_at:
+          type: string
+          format: date-time
+          example: '2026-11-02T10:30:00+03:00'
+        observations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObservationItem'
+        normal_no_concerns:
+          type: boolean
+          default: false
+        notes:
+          type: string
+          example: Soft stool this morning; drank less water.
+      required:
+      - id
+      - pet_id
+      - created_by_owner_id
+      - observed_at
+    ObservationList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Observation'
+    SymptomCount:
+      type: object
+      properties:
+        symptom:
+          type: string
+          example: Diarrhea
+        count:
+          type: integer
+          minimum: 0
+          example: 4
+      required:
+      - symptom
+      - count
+    TimelinePoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        symptom:
+          type: string
+        reported_count:
+          type: integer
+          minimum: 0
+      required:
+      - date
+      - symptom
+      - reported_count
+    DiaryStatistics:
+      type: object
+      description: Counts of owner-submitted observations, not medically verified illness incidence. No entry does
+        not imply good health.
+      properties:
+        pet_id:
+          type: string
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        symptom_frequency:
+          type: array
+          items:
+            $ref: '#/components/schemas/SymptomCount'
+        symptom_timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelinePoint'
+      required:
+      - pet_id
+      - from_date
+      - to_date
+      - symptom_frequency
+      - symptom_timeline
+    MedicalRecordInput:
+      type: object
+      description: Clinical fields are optional; an empty diagnosis does not mean the pet is healthy.
+      properties:
+        visit_date:
+          type: string
+          format: date
+        visit_type:
+          type: string
+          enum:
+          - ROUTINE_CHECKUP
+          - VACCINATION
+          - ILLNESS
+          - FOLLOW_UP
+          - OTHER
+        reason_for_visit:
+          type: string
+        clinical_findings:
+          type: string
+        diagnosis:
+          type: string
+        treatment:
+          type: string
+        prescribed_medication:
+          type: string
+        additional_clinical_notes:
+          type: string
+      required:
+      - visit_date
+      - visit_type
+    MedicalRecordUpdate:
+      type: object
+      description: Partial veterinary edit; only provided fields change.
+      properties:
+        visit_date:
+          type: string
+          format: date
+        visit_type:
+          type: string
+          enum:
+          - ROUTINE_CHECKUP
+          - VACCINATION
+          - ILLNESS
+          - FOLLOW_UP
+          - OTHER
+        reason_for_visit:
+          type: string
+        clinical_findings:
+          type: string
+        diagnosis:
+          type: string
+        treatment:
+          type: string
+        prescribed_medication:
+          type: string
+        additional_clinical_notes:
+          type: string
+    MedicalRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        pet_id:
+          type: string
+        veterinarian_id:
+          type: string
+        visit_date:
+          type: string
+          format: date
+        visit_type:
+          type: string
+          enum:
+          - ROUTINE_CHECKUP
+          - VACCINATION
+          - ILLNESS
+          - FOLLOW_UP
+          - OTHER
+        reason_for_visit:
+          type: string
+        clinical_findings:
+          type: string
+        diagnosis:
+          type: string
+        treatment:
+          type: string
+        prescribed_medication:
+          type: string
+        additional_clinical_notes:
+          type: string
+      required:
+      - id
+      - pet_id
+      - veterinarian_id
+      - visit_date
+      - visit_type
+    MedicalRecordList:
+      type: array
+      items:
+        $ref: '#/components/schemas/MedicalRecord'
+    VaccineCatalogItem:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Rabies vaccine
+        species_code:
+          type: string
+          example: CAT
+      required:
+      - name
+      - species_code
+    VaccineCatalog:
+      type: array
+      items:
+        $ref: '#/components/schemas/VaccineCatalogItem'
+    VaccinationInput:
+      type: object
+      properties:
+        vaccine_name:
+          type: string
+          example: Rabies vaccine
+        administration_date:
+          type: string
+          format: date
+        next_due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: A manually entered date, or null to clear it (clearing removes the active reminder; vaccination
+            history is kept). No due date means no reminder.
+        additional_notes:
+          type: string
+        previous_vaccination_id:
+          type: string
+          description: Optional link to previously due vaccination. When linked, completes its old reminder.
+      required:
+      - vaccine_name
+      - administration_date
+    VaccinationUpdate:
+      type: object
+      description: 'Partial veterinary edit; "next_due_date": null clears the scheduled reminder, omitting the field
+        leaves it unchanged.'
+      properties:
+        vaccine_name:
+          type: string
+          example: Rabies vaccine
+        administration_date:
+          type: string
+          format: date
+        next_due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: A manually entered date, or null to clear it (clearing removes the active reminder; vaccination
+            history is kept). No due date means no reminder.
+        additional_notes:
+          type: string
+        previous_vaccination_id:
+          type: string
+          description: Optional link to previously due vaccination. When linked, completes its old reminder.
+    VaccinationRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        pet_id:
+          type: string
+        vaccine_name:
+          type: string
+          example: Rabies vaccine
+        administration_date:
+          type: string
+          format: date
+        next_due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: A manually entered date, or null to clear it (clearing removes the active reminder; vaccination
+            history is kept). No due date means no reminder.
+        additional_notes:
+          type: string
+        previous_vaccination_id:
+          type: string
+          description: Optional link to previously due vaccination. When linked, completes its old reminder.
+      required:
+      - id
+      - pet_id
+      - vaccine_name
+      - administration_date
+    VaccinationList:
+      type: array
+      items:
+        $ref: '#/components/schemas/VaccinationRecord'
+    VaccinationReminder:
+      type: object
+      properties:
+        id:
+          type: string
+        pet_id:
+          type: string
+        pet_name:
+          type: string
+        owner_id:
+          type: string
+        vaccine_name:
+          type: string
+        due_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - UPCOMING
+          - DUE_TODAY
+          - OVERDUE
+          - COMPLETED
+          - DISCONTINUED
+      required:
+      - id
+      - pet_id
+      - vaccine_name
+      - due_date
+      - status
+    ReminderList:
+      type: array
+      items:
+        $ref: '#/components/schemas/VaccinationReminder'
+    WeekdayTime:
+      type: object
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: 1=Monday, 7=Sunday
+        start_time:
+          type: string
+          example: 09:00
+        end_time:
+          type: string
+          example: '17:00'
+      required:
+      - day_of_week
+      - start_time
+      - end_time
+    WeeklySchedule:
+      type: object
+      properties:
+        working_periods:
+          type: array
+          items:
+            $ref: '#/components/schemas/WeekdayTime'
+      required:
+      - working_periods
+    UnavailablePeriodInput:
+      type: object
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+      required:
+      - starts_at
+      - ends_at
+    UnavailablePeriod:
+      type: object
+      properties:
+        id:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+      required:
+      - id
+      - starts_at
+      - ends_at
+    AppointmentType:
+      type: object
+      description: Lower estimate must be nonnegative; appointment reservation uses standard_minutes+tolerance_minutes.
+      properties:
+        code:
+          type: string
+          enum:
+          - ROUTINE_CHECKUP
+          - VACCINATION
+          - ILLNESS
+          - FOLLOW_UP
+          - OTHER
+        standard_minutes:
+          type: integer
+          minimum: 10
+          example: 30
+        tolerance_minutes:
+          type: integer
+          minimum: 0
+          example: 10
+      required:
+      - code
+      - standard_minutes
+      - tolerance_minutes
+    AppointmentTypeList:
+      type: array
+      items:
+        $ref: '#/components/schemas/AppointmentType'
+    AppointmentPetInput:
+      type: object
+      properties:
+        pet_id:
+          type: string
+          example: pet-1
+        visit_type:
+          type: string
+          enum:
+          - ROUTINE_CHECKUP
+          - VACCINATION
+          - ILLNESS
+          - FOLLOW_UP
+          - OTHER
+        custom_visit_reason:
+          type: string
+          description: Required (non-blank) when visit_type is OTHER.
+          pattern: \S
+          minLength: 1
+        notes:
+          type: string
+          description: Optional per-pet symptom description or notes.
+      required:
+      - pet_id
+      - visit_type
+      allOf:
+      - if:
+          properties:
+            visit_type:
+              const: OTHER
+          required:
+          - visit_type
+        then:
+          required:
+          - custom_visit_reason
+    AppointmentSearchRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        pets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppointmentPetInput'
+          minItems: 1
+      required:
+      - date
+      - pets
+    AppointmentSlot:
+      type: object
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        estimated_min_minutes:
+          type: integer
+          minimum: 0
+        estimated_max_minutes:
+          type: integer
+          minimum: 10
+        reserved_minutes:
+          type: integer
+          minimum: 10
+      required:
+      - starts_at
+      - estimated_min_minutes
+      - estimated_max_minutes
+      - reserved_minutes
+    AppointmentSlotList:
+      type: array
+      items:
+        $ref: '#/components/schemas/AppointmentSlot'
+    NewAppointment:
+      type: object
+      description: 'Owner submits a request for one or more pets. The client cannot set a status: the server always
+        creates the request as PENDING_APPROVAL. Submission does not confirm the visit. Only the veterinarian can
+        approve or reject it (POST /appointments/{appointmentId}/decision); approval rechecks availability.'
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+          example: '2026-11-05T10:00:00+03:00'
+        pets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppointmentPetInput'
+          minItems: 1
+      required:
+      - starts_at
+      - pets
+      additionalProperties: false
+    Appointment:
+      type: object
+      description: An appointment request starts PENDING_APPROVAL. The veterinarian alone decides whether it becomes
+        CONFIRMED or REJECTED. A confirmed appointment can later be CANCELLED by the veterinarian, or rescheduled
+        (status stays CONFIRMED, starts_at changes). reserved_minutes is the calculated required block (upper duration);
+        for pending requests, it does not guarantee a temporary hold. The pending-hold policy is a team decision.
+      properties:
+        id:
+          type: string
+          example: appt-1
+        owner_id:
+          type: string
+          example: owner-1
+        starts_at:
+          type: string
+          format: date-time
+        reserved_minutes:
+          type: integer
+          description: Continuous time required if this request is approved; a pending request is not necessarily
+            held.
+        estimated_min_minutes:
+          type: integer
+        estimated_max_minutes:
+          type: integer
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - CONFIRMED
+          - REJECTED
+          - CANCELLED
+          readOnly: true
+          description: Server-controlled. New requests are always PENDING_APPROVAL; only the veterinarian decision
+            operation moves them to CONFIRMED or REJECTED.
+        pets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppointmentPetInput'
+      required:
+      - id
+      - owner_id
+      - starts_at
+      - reserved_minutes
+      - estimated_min_minutes
+      - estimated_max_minutes
+      - status
+      - pets
+    AppointmentList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Appointment'
+    ManageAppointmentRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+          - CANCEL
+          - RESCHEDULE
+        new_starts_at:
+          type: string
+          format: date-time
+          description: Required when action=RESCHEDULE.
+      required:
+      - action
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+          - APPOINTMENT_UPDATED
+          - APPOINTMENT_CANCELLED
+          - APPOINTMENT_APPROVED
+          - APPOINTMENT_REJECTED
+        message:
+          type: string
+        appointment_id:
+          type: string
+        new_starts_at:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+      required:
+      - id
+      - type
+      - message
+      - read
+    NotificationList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Notification'
+    ThemePreference:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum:
+          - LIGHT
+          - DARK
+          default: LIGHT
+      required:
+      - theme
+    ClinicContact:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          example: +90 312 000 00 00
+          description: Example only; replace with real clinic number.
+        display_message:
+          type: string
+          example: For urgent concerns, please phone the clinic directly.
+      required:
+      - phone_number
+    Problem:
+      type: object
+      description: Standardized API error body.
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          example: SLOT_UNAVAILABLE
+        detail:
+          type: string
+      required:
+      - title
+      - status
+      - code
+    AppointmentDecisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+      required:
+      - decision
+    UnavailablePeriodUpdate:
+      type: object
+      description: Partial edit; only provided fields change. ends_at must be after starts_at.
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+      minProperties: 1
+    UnavailablePeriodList:
+      type: array
+      items:
+        $ref: '#/components/schemas/UnavailablePeriod'
+    NotificationReadUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        read:
+          type: boolean
+      required:
+      - read
+  responses:
+    BadRequest:
+      description: Invalid request syntax or parameters
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Invalid request syntax or parameters
+            status: 400
+            code: BADREQUEST
+            detail: Invalid request syntax or parameters
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Missing or invalid authentication
+            status: 401
+            code: UNAUTHORIZED
+            detail: Missing or invalid authentication
+    Forbidden:
+      description: Role or ownership does not allow this operation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Role or ownership does not allow this operation
+            status: 403
+            code: FORBIDDEN
+            detail: Role or ownership does not allow this operation
+    NotFound:
+      description: Resource not found or not visible to current user
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Resource not found or not visible to current user
+            status: 404
+            code: NOTFOUND
+            detail: Resource not found or not visible to current user
+    Conflict:
+      description: Generic resource conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Conflict
+            status: 409
+            code: CONFLICT
+            detail: The request conflicts with the current state of the resource.
+    Unprocessable:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Request validation failed
+            status: 422
+            code: VALIDATION_ERROR
+            detail: Request validation failed
+    SlotUnavailable:
+      description: Selected interval conflicts with a confirmed appointment or a blocked period
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Slot unavailable
+            status: 409
+            code: SLOT_UNAVAILABLE
+            detail: The selected interval is no longer available.
+    EmailAlreadyExists:
+      description: An account with this email already exists
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Email already exists
+            status: 409
+            code: EMAIL_ALREADY_EXISTS
+            detail: An account with this email already exists.
+    UnavailablePeriodOverlap:
+      description: Blocked period overlaps another blocked period
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: Unavailable period overlap
+            status: 409
+            code: UNAVAILABLE_PERIOD_OVERLAP
+            detail: The period overlaps an existing blocked period.
+    AppointmentConflict:
+      description: Appointment is in the wrong state, or the interval conflicts with a confirmed booking
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            slotConflict:
+              value:
+                title: Slot unavailable
+                status: 409
+                code: SLOT_UNAVAILABLE
+                detail: The requested interval conflicts with another confirmed appointment.
+            invalidState:
+              value:
+                title: Invalid appointment state
+                status: 409
+                code: INVALID_STATE
+                detail: This operation is not allowed for the appointment's current status.
