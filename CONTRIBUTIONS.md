@@ -16,8 +16,7 @@ Team Member 1 — Deniz Alagöz
 ◦ Added the system context diagram and project documentation to the repository.
 ◦ Updated README links to make the documentation accessible.
  GitHub Evidence:
-  https://github.com/HUARGE/Pawthy/pull/6), https://github.com/HUARGE/Pawthy/pull/6/commits 
-  ▪ Issues: None yet
+  (https://github.com/HUARGE/Pawthy/pull/6), (https://github.com/HUARGE/Pawthy/pull/6/commits), (https://github.com/HUARGE/Pawthy/issues/8)
 
 
 Team Member 2 — Sıla Gevrek
