@@ -1,498 +1,556 @@
-# Pawthy — UML Design Diagrams (Sprint 2)
+# Pawthy — UML Design Diagrams (Sprint 2 SRS Reconciliation)
 
-> **Owner:** Efe, Software Architect · **Date:** 2026-11-19 · **Status:** PROPOSED, not implemented  
-> **Contract:** `api/openapi.yaml` OpenAPI v0.6.3 (`develop` HEAD `a5c08a8534c8e6512f6621628bf751b434977d83`)  
-> **Requirements:** Sprint 1 final-working report, **US-01–US-13**. Formal Sprint 2 SRS review remains pending.
+> **Owner:** Software Architect (Efe) · **Reviewed:** 20 November 2026 · **Status:** PROPOSED DESIGN, not implemented or formally approved.  
+> **Source of proposed behaviors:** Deniz's 69-page *Functional Requirements* SRS supplied 20 Nov 2026 (sections 3.1–3.14). **Contract actually published:** `api/openapi.yaml` v0.6.3 on `develop`.  
+> **Important:** The 69-page SRS repeats section 3.7 (US-07) and has no separate US-08 section. The supplementary **5.2 Software Interfaces** requires Django/MySQL, backend-only database access, **soft deletion and restoration**. **FR-08 View Veterinary Clinical Records** has since been supplied in separate team slides (screenshots starting on slide 31/222, **Must Have**). Owner-only read requirements are now grounded. The 69-page PDF still needs its duplicate section edited and 3.8 inserted. See [SRS review](../architecture/srs-2026-11-20-review.md).
 
-## 1. Diagram index and interpretation
+## 1. Diagram index and model status
 
-| Diagram | Purpose | Related stories / API |
+| Model | Coverage | Review status |
 |---|---|---|
-| UML Use Case | Functional system boundary covering all **13** user stories | US-01–US-13, role permissions |
-| UML Class A | Owner, pet, diary, clinical/vaccine and reminder data schema | `/pet-owners`, `/pets`, `/observations`, `/medical-records`, `/vaccinations` |
-| UML Class B | Scheduling, appointments, intervals, clinic contact and theme | `/appointments`, `/availability/*`, `/veterinarian/*`, `/clinic/contact`, `/me/theme` |
-| Sequence 1 | Vet-provisioned credentials and mandatory first-login password replacement | US-01–03 · `/auth/login`, `/auth/change-password` |
-| Sequence 2 | Conflict-controlled **manual** appointment entry | US-11–12 · `POST /appointments`, public calendar |
-| Sequence 3 | Vaccination entry, 7-day reminder and linked replacement | US-09–10 · vaccinations and reminders |
-| Sequence 4 | Public calendar privacy projection | US-11–12 · `GET /availability/calendar` |
-| State 1 | Appointment lifecycle | `CONFIRMED`, `CANCELLED` |
-| State 2 | Vaccination reminder lifecycle | `UPCOMING`, `DUE_TODAY`, `OVERDUE`, `COMPLETED`, `DISCONTINUED` |
+| Formal PlantUML | [use-cases.puml](use-cases.puml) | Updated for US-14, owner-only actions and SRS conflicts |
+| Use-case overview | US-01–US-14 including now-confirmed owner-only **FR-08** | Proposed design; SRS PDF still needs editorial repair |
+| Class A | Owner, Pet, diary, clinical, vaccination, reminder, guided-tour state | Target fields; differences from API 0.6.3 below |
+| Class B | Working calendar, manual appointment, in-app notification, theme | Target fields/statuses; contract changes pending |
+| Sequence 1 | Initial Owner ID login and password change | Account identifier mismatch pending API owner |
+| Sequence 2 | Manual appointment: overlap rejection vs out-of-hours override | API extension pending |
+| Sequence 3 | Vaccination record, reminders, read status | API model extension pending |
+| Sequence 4 | Owner weekly availability | Public-vs-owner response mismatch pending |
+| Sequence 5 | Optional four-step US-14 guided tour | New API contract needed, P2 |
+| Sequence 6 | **FR-08 View Veterinary Clinical Records:** owner authorization, newest first, no soft-deleted data, empty-state | API GET exists; deleted-record filtering/UI behavior not yet guaranteed |
+| State machines | Appointment / Vaccination reminder / Guided tour | SRS-target states; not API v0.6.3 enums |
 
-**Notation:** Class attributes use the **exact JSON field names** from OpenAPI. An association or container is a **logical proposed relationship**, not a claim about SQL foreign-key implementation. `DateTime` implies ISO 8601 offset-bearing strings where the API contract requires them. **Optional** attributes are explicitly stated in the notes below. Mermaid renders Class/Sequence/State diagrams on GitHub; the use-case overview is also supplied as a conventional PlantUML file, [`use-cases.puml`](use-cases.puml).
+*Notation:* Mermaid diagrams represent **SRS-target logical design**, not already implemented database tables. The existing API fields must **not** be claimed to conform until approved and changed. Dashed arrows indicate derived views or dependency. Owner permissions must be enforced server-side.
 
-## 2. Use Case Diagram — All 13 Stories
-
-This Mermaid view is a **use-case-style system boundary**, not a strict UML use-case notation. The accompanying `.puml` is the formal UML use-case representation. `PUBLIC` endpoints are available without login; they do not create an additional authenticated user type.
+## 2. Use Case Overview
 
 ```mermaid
 flowchart LR
-    O["Pet Owner"]
-    V["Veterinarian / Administrator"]
-    G["Public / Unauthenticated Visitor"]
-    subgraph S["Pawthy Software System"]
-        U1(["US-01 Create owner accounts"])
-        U2(["US-02 Login / change password"])
-        U3(["US-03 Apply role / ownership permissions"])
-        U4(["US-04 Manage pet profiles"])
-        U5(["US-05 Record diary observations"])
-        U6(["US-06 View diary history / statistics"])
-        U7(["US-07 Manage clinical records"])
-        U8(["US-08 View clinical records"])
-        U9(["US-09 Manage vaccinations"])
-        U10(["US-10 View vaccination reminders"])
-        U11(["US-11 Manage / view availability calendar"])
-        U12(["US-12 Manage manual appointments"])
-        U13(["US-13 Save light / dark theme"])
-        C(["View public calendar / contact"])
+  O["Pet Owner"]
+  V["Veterinarian / Administrator"]
+  G["Public Visitor"]
+  subgraph P["Pawthy (SRS-proposed)"]
+    U01(["US-01 Provision Owner Accounts"])
+    U02(["US-02 First Login via Owner ID"])
+    U03(["US-03 Enforce RBAC / Owner Isolation"])
+    U04V(["US-04 Maintain Official Pet Profiles"])
+    U04O(["US-04 Own Photos / Archive View"])
+    U05(["US-05 Own Health Diary CRUD"])
+    U06(["US-06 Diary History / Statistics"])
+    U07V(["US-07 Manage Clinical Records"])
+    U08(["FR-08 View Own Veterinary Clinical Records (read only)"])
+    U09(["US-09 Manage Vaccinations"])
+    U10(["US-10 View / Read Vaccination Reminders"])
+    U11V(["US-11 Maintain Hours and Exceptions"])
+    U11O(["US-11 View Available Times Only"])
+    U12V(["US-12 Vet Manual Appointments"])
+    U12O(["US-12 Own Appointments / Notifications"])
+    U13(["US-13 Light / Dark Theme"])
+    U14(["US-14 Optional Guided Tour / Replay"])
+    C(["View Clinic Contact"])
+  end
+  V --- U01
+  O --- U02
+  V --- U02
+  O --- U03
+  V --- U03
+  V --- U04V
+  O --- U04O
+  O --- U05
+  O --- U06
+  V --- U06
+  V --- U07V
+  O --- U08
+  V --- U09
+  O --- U10
+  V --- U10
+  V --- U11V
+  O --- U11O
+  V --- U12V
+  O --- U12O
+  O --- U13
+  V --- U13
+  O --- U14
+  O --- C
+  V --- C
+  G --- C
+```
+
+**Actor precision:** The visitor is **not a third authenticated role**. The SRS specifically grants the **authenticated owner** weekly read-only availability, while the existing API publishes a public availability endpoint; this is an unresolved contract policy (not a claim public visitors can see owner's appointments). The veterinarian alone changes official pet/clinical/vaccination/calendar data; owner alone manages own diary and private gallery. The veterinarian can *read* owner diary, not edit it. US-14 applies to Pet Owner, never automatically to veterinarian.
+
+## 3. Class Diagram A — Owner and Pet Health Domain (SRS target)
+
+```mermaid
+classDiagram
+  direction LR
+  class OwnerAccount {
+    +String owner_id
+    +String full_name
+    +String phone_number
+    +Boolean must_change_password
+    +GuidedTourStatus guided_tour_status
+    +DateTime tour_status_updated_at
+  }
+  class Pet {
+    +String pet_id
+    +String owner_id
+    +String name
+    +String species_code
+    +String breed
+    +String sex
+    +String life_stage
+    +Date birth_date
+    +String birth_date_accuracy
+    +String microchip_status
+    +String microchip_number
+    +String clinical_status
+    +Boolean archived_by_owner
+  }
+  class PetPersonalPhoto {
+    +String photo_id
+    +String pet_id
+    +String owner_id
+    +String protected_photo_reference
+  }
+  class ClinicPetPhoto {
+    +String pet_id
+    +String protected_photo_reference
+  }
+  class Observation {
+    +String observation_id
+    +String pet_id
+    +String owner_id
+    +DateTime observed_at
+    +DateTime created_at
+    +String notes
+    +String[] symptom_codes
+    +Boolean normal_no_concerns
+  }
+  class ClinicalRecord {
+    +String record_id
+    +String pet_id
+    +Date visit_date
+    +String visit_type
+    +String clinical_findings
+    +String diagnosis
+    +String treatment
+    +String medications
+    +DateTime created_at
+    +DateTime updated_at
+    +DateTime deleted_at
+    +String deleted_by
+  }
+  class VaccinationRecord {
+    +String vaccination_id
+    +String pet_id
+    +String vaccine_name
+    +Date administration_date
+    +Date next_due_date
+    +String previous_vaccination_id
+  }
+  class VaccinationReminder {
+    +String reminder_id
+    +String vaccination_id
+    +String pet_id
+    +Date due_date
+    +String status
+    +Boolean is_read
+    +DateTime completed_at
+  }
+  OwnerAccount "1" --> "0..*" Pet : stable owner_id
+  Pet "1" --> "0..*" Observation : owner-only writes
+  Pet "1" --> "0..*" ClinicalRecord : vet-only writes
+  Pet "1" --> "0..*" VaccinationRecord : vet-only writes
+  VaccinationRecord "1" --> "0..1" VaccinationReminder : next_due_date
+  VaccinationRecord "0..1" --> "0..*" VaccinationRecord : links previous
+  Pet "1" --> "0..*" PetPersonalPhoto : owner-private
+  Pet "1" --> "0..1" ClinicPetPhoto : official
+```
+
+**FR-based constraints:**
+- **FR-01.2/01.3/01.9, FR-02.3:** Full name + phone are mandatory; the generated `owner_id` remains unchanged after phone edits; initial login uses Owner ID + temporary password. Current v0.6.3 requires `email` and logs in with email — **not aligned**.
+- **FR-04.9–04.12/04.19–04.22:** Vet-maintained life stage independent of exact/estimated birth date; required `microchip_status`, conditionally required number; displayed age from recorded date with an approximate marker when estimated. Current API has `estimated_age_months` and lacks explicit birth accuracy, life stage and microchip status — **gap**.
+- **FR-04.13–04.17:** Vet can edit official clinic photo but not owner's private gallery; owner can manage private gallery but not vet's photo. Owner archive is **view-only**, not record deletion. Deceased pets preserve clinical history.
+- **FR-05.4/05.12/05.13, FR-06.4–06.5:** `observed_at` is editable for past events, distinct from immutable `created_at`; future observation rejected; symptom frequency counts **distinct calendar days**, not repeated entries.
+- **FR-07.9/07.16 + supplementary SI-07 and FR-08:** Vet may **soft-delete** clinical records after confirmation and **restore** them; they remain recoverable. Do **not cascade-delete** separately stored diary/vaccinations. `deleted_at`/`deleted_by` are proposed persistence fields, not existing API fields. SRS excludes permanent ordinary deletion of pet profile/history (US-04); Section 5.2 SI-07 confirms that clinical deletion is soft and supports restoration; final restore authorization and audit semantics require API team review.
+- **FR-09.15:** Vaccination records are **not deletable by either role**; vet may update. **FR-10.11:** marking a reminder read never means vaccine completed.
+- `GuidedTourStatus` is `NOT_STARTED | COMPLETED | SKIPPED` (proposed wire spelling). It belongs to the **account**, never device-local storage as the authoritative source. Tour replay retains existing state.
+
+## 4. Class Diagram B — Scheduling, Notifications and Preferences
+
+```mermaid
+classDiagram
+  direction LR
+  class OwnerAccount {
+    +String owner_id
+    +String phone_number
+  }
+  class Pet {
+    +String pet_id
+    +String owner_id
+  }
+  class Appointment {
+    +String appointment_id
+    +String owner_id
+    +DateTime starts_at
+    +DateTime ends_at
+    +Integer duration_minutes
+    +String status
+    +Boolean out_of_hours_override_confirmed
+    +String purpose
+    +String notes
+    +DateTime created_at
+    +DateTime updated_at
+  }
+  class AppointmentPet {
+    +String pet_id
+  }
+  class AppointmentNotification {
+    +String notification_id
+    +String owner_id
+    +String appointment_id
+    +String event_type
+    +DateTime created_at
+    +Boolean is_read
+  }
+  class WeeklyWorkingPeriod {
+    +Integer day_of_week
+    +String start_time
+    +String end_time
+  }
+  class DateException {
+    +String exception_id
+    +Date date
+    +DateTime starts_at
+    +DateTime ends_at
+    +String availability_type
+  }
+  class OwnerAvailabilityInterval {
+    +DateTime starts_at
+    +DateTime ends_at
+  }
+  class ThemePreference {
+    +String theme
+  }
+  OwnerAccount "1" --> "0..*" Appointment
+  Appointment "1" *-- "1..*" AppointmentPet
+  Pet "1" --> "0..*" AppointmentPet
+  OwnerAccount "1" --> "0..*" AppointmentNotification
+  Appointment "1" --> "0..*" AppointmentNotification
+  WeeklyWorkingPeriod ..> OwnerAvailabilityInterval : baseline
+  DateException ..> OwnerAvailabilityInterval : override
+  Appointment ..> OwnerAvailabilityInterval : exclude occupied
+```
+
+**Status/data precision:** The **SRS** specifies `Scheduled`, `Completed`, `Canceled` and a conditional out-of-hours override flag (US-12 table). Proposed API spelling is `SCHEDULED | COMPLETED | CANCELED` **subject to API-owner approval**; existing OpenAPI uses `CONFIRMED | CANCELLED`. A canceled appointment releases its occupied interval; an active overlapping appointment is rejected **even after** a vet overrides clinic hours. SRS FR-12.17/18 require in-app notifications for date/time changes and cancellation; there is no external SMS/email. A theme change must not touch functional records.
+
+## 5. Sequence — Owner ID and Mandatory First-Login Password Change (US-01/02)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Vet as Veterinarian
+  actor Owner as Pet Owner
+  participant UI as Pawthy Browser
+  participant API as Proposed REST API
+  participant Auth as Auth / RBAC
+  participant DB as Account Store
+  Vet->>UI: Register full_name + mandatory phone_number
+  UI->>API: POST /pet-owners (vet credentials)
+  API->>Auth: Authorize veterinarian
+  Auth->>DB: Generate stable independent owner_id + temporary password hash
+  DB-->>Auth: Owner account saved
+  API-->>UI: Owner ID + one-time temporary password
+  Note over Vet,Owner: Vet hands password to owner in person
+  Owner->>UI: Login with Owner ID + temporary password
+  UI->>API: POST /auth/login
+  API->>Auth: Verify account and temporary credentials
+  Auth-->>API: must_change_password = true
+  API-->>UI: Restricted session and mandatory change screen
+  Owner->>UI: Choose valid personal password
+  UI->>API: POST /auth/change-password
+  API->>Auth: Validate, hash, revoke prior sessions
+  Auth->>DB: Save credential, clear first_login restriction
+  API-->>UI: Password changed successfully
+  UI-->>Owner: Access dashboard; US-14 first-time tour eligible
+```
+
+**Contract gap:** Existing OpenAPI `LoginRequest.email` and `OwnerAccountRequest.email` contradict SRS. The wire field rename, temporary credential delivery response and phone update endpoint must be revised by API owner; this diagram is not a statement that the endpoints already have these fields. Password validation, server access control and revocation remain implementation responsibilities.
+
+## 6. Sequence — Manual Appointment, Hard Conflict and Soft Hours Override (US-11/12)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Owner as Pet Owner
+  actor Vet as Veterinarian
+  participant UI as Vet Calendar UI
+  participant API as REST API (proposed)
+  participant Cal as Scheduling Service
+  participant DB as Data Store
+  participant Notif as In-App Notification Service
+  Owner->>Vet: Arrange by phone / in person (outside Pawthy)
+  Vet->>UI: Choose own-account pets and interval >= 10 minutes
+  UI->>API: POST /appointments (vet only)
+  API->>Cal: Validate pets owner, duration, active overlap
+  alt Overlaps another active appointment
+    Cal-->>API: Hard conflict (not overridable)
+    API-->>UI: 409 Conflict
+    UI-->>Vet: Select different time
+  else No active overlap
+    Cal->>Cal: Check weekly schedule + unavailable exceptions
+    alt Outside working hours / unavailable
+      Cal-->>UI: Warning; explicit confirmation required (API design TBD)
+      alt Vet declines warning
+        UI-->>Vet: Do not save
+      else Vet confirms warning
+        UI->>API: Resubmit with explicit override acknowledgment
+        API->>Cal: Recheck all validation and conflicts atomically
+        Cal->>DB: Save appointment with override flag
+        DB-->>UI: Created as Scheduled
+      end
+    else Normal available interval
+      Cal->>DB: Atomically save appointment as Scheduled
+      DB-->>UI: Created as Scheduled
     end
-    V --- U1
-    O --- U2
-    V --- U2
-    O --- U3
-    V --- U3
-    O --- U4
-    V --- U4
-    O --- U5
-    O --- U6
-    V --- U6
-    V --- U7
-    O --- U8
-    V --- U8
-    V --- U9
-    O --- U10
-    V --- U10
-    V --- U11
-    V --- U12
-    O --- U13
-    V --- U13
-    G --- C
-    O --- C
-    V --- C
+  end
+  opt Vet reschedules (date/time changed)
+    Vet->>UI: Save new interval
+    UI->>API: PATCH /appointments/{appointmentId}
+    API->>Cal: Revalidate conflict / hours warning
+    Cal->>DB: Release old interval and occupy new
+    API->>Notif: Create owner in-app reschedule notice
+  end
+  opt Vet cancels
+    Vet->>UI: Cancel appointment
+    UI->>API: PATCH /appointments/{appointmentId}
+    API->>DB: Mark Canceled, retain history, free interval
+    API->>Notif: Create owner in-app cancellation notice
+  end
 ```
 
-**Role-precision notes:** US-04 is deliberately shared at the *story* level, but actions are distinct: vet creates/edits **clinical identity** and uploads clinical photo; owner manages **personal notes/photo gallery** and archive visibility. US-11 is also mixed: vet edits schedule and blocks; owners and public visitors only **read privacy-safe times**. US-12 is veterinarian-only; owner appointment access is **read-only** and appointment arrangements happen offline. US-03 is a cross-cutting server authorization rule, not a page that users can invoke to change permissions.
+**Implementation requirement:** The shown “warn and resubmit” protocol is a **proposal**, not an endpoint already defined in v0.6.3. API owner must decide a deterministic warning/acknowledgment representation and document error responses. A transaction/locking strategy must prevent concurrent double-booking. No owner online booking/approval workflow.
 
-## 3. Class Diagram A — Pet Health and Clinical Data
+## 7. Sequence — Vaccination, Due-Date Reminder and Read State (US-09/10)
 
 ```mermaid
-classDiagram
-    direction LR
-    class OwnerAccount {
-       +String id
-       +String full_name
-       +String email
-    }
-    class Pet {
-       +String id
-       +String owner_id
-       +String name
-       +String species_code
-       +String other_species_name
-       +String breed
-       +Date date_of_birth
-       +Integer estimated_age_months
-       +String sex
-       +String microchip_number
-       +String clinical_photo_url
-       +String clinical_status
-       +Boolean archived_by_owner
-    }
-    class PetPersonalDetails {
-       +String personal_notes
-    }
-    class PetPhoto {
-       +String id
-       +String pet_id
-       +String image_url
-       +DateTime created_at
-    }
-    class Observation {
-       +String id
-       +String pet_id
-       +String created_by_owner_id
-       +DateTime observed_at
-       +ObservationItem[] observations
-       +Boolean normal_no_concerns
-       +String notes
-    }
-    class ObservationItem {
-       +String category
-       +String symptom_code
-       +String custom_description
-    }
-    class MedicalRecord {
-       +String id
-       +String pet_id
-       +String veterinarian_id
-       +Date visit_date
-       +String visit_type
-       +String reason_for_visit
-       +String clinical_findings
-       +String diagnosis
-       +String treatment
-       +String prescribed_medication
-       +String additional_clinical_notes
-    }
-    class VaccinationRecord {
-       +String id
-       +String pet_id
-       +String vaccine_name
-       +Date administration_date
-       +Date next_due_date
-       +String additional_notes
-       +String previous_vaccination_id
-    }
-    class VaccinationReminder {
-       +String id
-       +String pet_id
-       +String pet_name
-       +String owner_id
-       +String vaccine_name
-       +Date due_date
-       +String status
-    }
-    OwnerAccount "1" --> "0..*" Pet : owner_id
-    Pet "1" --> "0..1" PetPersonalDetails : personal data view
-    Pet "1" --> "0..*" PetPhoto : personal gallery
-    Pet "1" --> "0..*" Observation : diary
-    Observation "1" *-- "0..*" ObservationItem : observations
-    Pet "1" --> "0..*" MedicalRecord : clinical history
-    Pet "1" --> "0..*" VaccinationRecord : vaccinations
-    VaccinationRecord "0..1" --> "0..1" VaccinationRecord : previous_vaccination_id
-    Pet "1" --> "0..*" VaccinationReminder : reminder views
+sequenceDiagram
+  autonumber
+  actor Vet as Veterinarian
+  actor Owner as Pet Owner
+  participant UI as Web UI
+  participant API as REST API
+  participant Vacc as Vaccination / Reminder Service
+  participant DB as Store
+  Vet->>UI: Record administered vaccine and optional next_due_date
+  UI->>API: POST /pets/{petId}/vaccinations
+  API->>Vacc: Validate veterinarian permission and pet
+  Vacc->>DB: Save separate immutable-identity vaccination record
+  opt Due date supplied
+    Vacc->>DB: Create/update linked reminder in Scheduled state
+  end
+  Owner->>UI: View dashboard reminders for owned active pets
+  UI->>API: GET /vaccination-reminders (auth)
+  API->>Vacc: Return Upcoming (1-7d), Due, Overdue only
+  Vacc-->>UI: Role-filtered records
+  opt Owner marks notification read
+    Owner->>UI: Mark read
+    UI->>API: Proposed reminder read-status update
+    API->>Vacc: Set is_read=true, leave completion/status unchanged
+  end
+  opt Vet links a new vaccination to a previous record
+    UI->>API: POST /pets/{petId}/vaccinations with previous_vaccination_id
+    Vacc->>DB: Complete previous reminder; optionally create new reminder
+  end
+  opt Pet deceased
+    Vacc->>DB: Suppress active/future reminders; retain vaccination history
+  end
 ```
 
-### 3.1 Field and lifecycle constraints
+**Gap:** API 0.6.3 exposes `UPCOMING | DUE_TODAY | OVERDUE | COMPLETED | DISCONTINUED` and no separate `is_read` endpoint; SRS defines `Scheduled | Upcoming | Due | Overdue | Completed | Suppressed` plus independent read state. Do **not** silently equate them.
 
-- The classes above mirror **OpenAPI response schemas**, not necessarily DB tables. `OwnerAccount` represents a pet-owner record; the vet's login identity/credential storage model is **not specified** by those schemas and is deliberately not fabricated here.
-- The **required** OpenAPI fields are: `OwnerAccount(id, full_name, email)`; `Pet(id, owner_id, name, species_code, sex, clinical_status, archived_by_owner)`; `Observation(id, pet_id, created_by_owner_id, observed_at)`; `MedicalRecord(id, pet_id, veterinarian_id, visit_date, visit_type)`; `VaccinationRecord(id, pet_id, vaccine_name, administration_date)`; `VaccinationReminder(id, pet_id, vaccine_name, due_date, status)`. Other displayed attributes may be optional (or conditionally present) as specified by schema.
-- `Pet.sex` is `FEMALE | MALE | UNKNOWN`; `Pet.clinical_status` is `ACTIVE | DECEASED | NO_LONGER_AT_CLINIC`. Archiving an owner view must not delete clinical history; `DECEASED` discontinues future reminders.
-- `Observation.observations` contains zero or more `ObservationItem` values with `category`, `symptom_code`, and optional `custom_description`. Input must have observation content or written notes according to Sprint 1. Owner can edit/delete their own entries, vet only reads. **No entry on a date does not mean healthy.**
-- `MedicalRecord.visit_date` and `visit_type` are required, unlike optional findings, diagnosis and notes. An absent diagnosis must not be interpreted as “normal.”
-- `VaccinationRecord.next_due_date` may be **null**, and `previous_vaccination_id` links a new vaccination to an older one. The `VaccinationReminder` is an API view/derived lifecycle based on recorded due dates; whether it is stored as its own SQL table is **not decided**.
-- **Access-control is not visible in class multiplicities**: every operation still requires server-side role and owner/pet checks, including access to media URLs.
-
-## 4. Class Diagram B — Scheduling, Calendar and Preferences
+## 8. Sequence — Owner-Only Available Intervals (US-11)
 
 ```mermaid
-classDiagram
-    direction LR
-    class OwnerAccount {
-        +String id
-        +String full_name
-        +String email
-    }
-    class Pet {
-        +String id
-        +String owner_id
-        +String name
-    }
-    class Appointment {
-        +String id
-        +String owner_id
-        +DateTime starts_at
-        +DateTime ends_at
-        +String status
-        +AppointmentPet[] pets
-        +String visit_reason
-        +String notes
-        +String owner_name
-        +DateTime created_at
-    }
-    class AppointmentPet {
-        +String pet_id
-        +String pet_name
-        +String visit_type
-        +String custom_visit_reason
-        +String notes
-    }
-    class WeeklySchedule {
-        +String timezone
-        +WeeklyWorkingPeriod[] periods
-    }
-    class WeeklyWorkingPeriod {
-        +Integer day_of_week
-        +String start_time
-        +String end_time
-    }
-    class AvailabilityBlockInput {
-        +DateTime starts_at
-        +DateTime ends_at
-        +String status
-        +String note
-    }
-    class BusyTime {
-        +String id
-        +DateTime starts_at
-        +DateTime ends_at
-        +String reason
-    }
-    class AvailabilityInterval {
-        +DateTime starts_at
-        +DateTime ends_at
-        +String status
-    }
-    class ClinicContact {
-        +String phone_number
-        +String display_message
-    }
-    class ThemePreference {
-        +String theme
-    }
-    OwnerAccount "1" --> "0..*" Appointment : owner_id
-    Appointment "1" *-- "1..*" AppointmentPet : pets
-    Pet "1" --> "0..*" AppointmentPet : pet_id
-    WeeklySchedule "1" *-- "0..*" WeeklyWorkingPeriod : periods
-    WeeklySchedule ..> AvailabilityInterval : working baseline
-    AvailabilityBlockInput ..> AvailabilityInterval : overrides
-    BusyTime ..> AvailabilityInterval : marks busy
-    Appointment ..> AvailabilityInterval : active booking marks busy
+sequenceDiagram
+  autonumber
+  actor Owner as Authenticated Pet Owner
+  participant UI as Owner Weekly Calendar
+  participant API as REST API (proposal)
+  participant Cal as Scheduling Service
+  participant DB as Data Store
+  participant View as Privacy-Safe Available-Only Projection
+  Owner->>UI: Open or change week
+  UI->>API: GET /availability/calendar (owner auth; week range)
+  API->>Cal: Calculate intervals
+  Cal->>DB: Fetch weekly hours, exceptions and active appointments
+  DB-->>Cal: Private schedule inputs
+  Cal->>View: Subtract unavailable and occupied intervals
+  View-->>API: AVAILABLE time intervals + clinic phone only
+  API-->>UI: Render read-only slots; no owner/pet/visit identifiers
+  UI-->>Owner: Call clinic to arrange appointment offline
 ```
 
-**Exact schema nuance:** The API defines `AvailabilityBlockInput` fields above, but its `AvailabilityBlock` response schema currently uses an `allOf` composition; it is not a separately specified database entity. Using `AvailabilityBlockInput` prevents inventing additional columns. `WeeklySchedule`, `ClinicContact` and `ThemePreference` are contract representations; persistence ownership/detail may change. `AppointmentPetInput` (creation) requires `pet_id`, while `AppointmentPet` (response) also requires `visit_type`.
+**Unresolved scope decision:** SRS FR-11.10/11.11 describes **authenticated owner** and **available-only** output. Current public `GET /availability/calendar` (`security: []`) includes `AVAILABLE/BUSY/CLOSED` periods. Never claim v0.6.3 returns the SRS projection. The team must decide whether to change the existing endpoint or introduce a separate owner-specific representation; do not remove the existing public contract without agreement.
 
-**Status/validation rules:** `Appointment.status = CONFIRMED | CANCELLED`; `AvailabilityBlockInput.status = AVAILABLE | BUSY`; `AvailabilityInterval.status = AVAILABLE | BUSY | CLOSED`; `ThemePreference.theme = LIGHT | DARK`. A valid appointment has an end after its start, lasts **at least 10 minutes**, falls inside allowed clinic time and does not overlap another active booking or busy period. `CANCELLED` is retained as history but freed from the busy projection. Owners cannot create/update/cancel appointments via web UI. Public availability is a **separate aggregate result**, not `Appointment` objects with fields merely hidden by CSS.
+## 9. State Machine A — Appointment (SRS statuses)
 
-## 5. Sequence Diagram 1 — First Login & Mandatory Password Change (US-01, US-02, US-03)
+```mermaid
+stateDiagram-v2
+  [*] --> Scheduled : Vet saves valid manual appointment
+  Scheduled --> Scheduled : Vet reschedules / revalidate conflict and hours
+  Scheduled --> Completed : Vet records completion
+  Scheduled --> Canceled : Vet cancels
+  Completed --> [*] : Historical record retained
+  Canceled --> [*] : Historical record; interval released
+  note right of Scheduled
+    Occupies its time interval.
+    Out-of-hours is permitted after explicit
+    vet warning acknowledgment if no overlap.
+  end note
+```
+
+**Existing API disparity:** `CONFIRMED/CANCELLED` only; `COMPLETED` absent; this proposed lifecycle requires API owner confirmation, particularly whether `Completed` still occupies historic time and permitted editing after completion.
+
+## 10. State Machine B — Vaccination Reminder (SRS statuses)
+
+```mermaid
+stateDiagram-v2
+  [*] --> Scheduled : Vet sets next_due_date
+  Scheduled --> Upcoming : 7 days before due_date
+  Upcoming --> Due : Due date reached
+  Due --> Overdue : After due date
+  Scheduled --> Completed : Linked subsequent vaccination
+  Upcoming --> Completed : Linked subsequent vaccination
+  Due --> Completed : Linked subsequent vaccination
+  Overdue --> Completed : Linked subsequent vaccination
+  Scheduled --> Suppressed : Pet deceased
+  Upcoming --> Suppressed : Pet deceased
+  Due --> Suppressed : Pet deceased
+  Overdue --> Suppressed : Pet deceased
+  Completed --> [*]
+  Suppressed --> [*]
+  note right of Scheduled
+    More than 7 days away;
+    hidden from owner's active reminders.
+  end note
+```
+
+**Independent property:** `is_read` can change within `Upcoming/Due/Overdue` without changing the vaccination status. Archive hides reminders from owner's **active** list but does not suppress veterinarian monitoring. Removing a due date deactivates or updates the corresponding reminder without generating a duplicate, exact status to be agreed.
+
+## 11. Sequence — US-14 First-Time Guided Tour (P2)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Owner as Pet Owner
+  participant UI as Browser Dashboard
+  participant API as Proposed Account Preference API
+  participant DB as Owner Account Store
+  Owner->>UI: Finish required temporary password change
+  Owner->>UI: Open dashboard
+  UI->>API: GET /me/guided-tour (proposal)
+  API->>DB: Read owner-level persisted status
+  DB-->>API: NOT_STARTED
+  API-->>UI: status NOT_STARTED
+  UI-->>Owner: Highlight My Pets; dim rest; tooltip
+  Owner->>UI: Next / Back across four steps
+  UI-->>Owner: Health Diary -> Health Records -> Vaccinations & Reminders
+  alt Finish final step
+    UI->>API: PATCH /me/guided-tour status COMPLETED
+    API->>DB: Persist COMPLETED for this Owner ID
+  else Skip from any step
+    UI->>API: PATCH /me/guided-tour status SKIPPED
+    API->>DB: Persist SKIPPED for this Owner ID
+  end
+  opt Later replay via Help
+    Owner->>UI: Replay Tour
+    UI->>API: GET /me/guided-tour
+    API-->>UI: Existing COMPLETED or SKIPPED
+    UI-->>Owner: Display same four-step tour without changing stored status
+  end
+```
+
+**Proposed API** paths above do not yet exist. The 4 steps are **My Pets → Health Diary → Health Records → Vaccinations & Reminders**. `Next/Back/Skip`; partial dimming + tooltip; account-level persistence across devices; only owner; no blocked feature access. Onboarding is **not mandatory for initial Sprint 3 MVP** (SRS scope, P2).
+
+## 12. Sequence — FR-08 Owner Viewing Veterinary Clinical Records (Must Have)
+
+Source: separately supplied **FR-08 — View Veterinary Clinical Records**, screenshot screenshots starting on slide 31/222, **Primary Actor: Pet Owner**. Preconditions: authenticated owner, selected pet belongs to that owner's account.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Vet as Veterinarian
-    actor Owner as Pet Owner
-    participant UI as Web UI (HTML/JS)
+    actor Owner as Authenticated Pet Owner
+    participant UI as Medical Records View
     participant API as REST API
-    participant Auth as Auth/Access Module
-    participant DB as Data Store
-    Vet->>UI: Create owner account during clinic visit
-    UI->>API: POST /pet-owners (vet bearer)
-    API->>Auth: Require role VETERINARIAN
-    Auth-->>API: Authorized
-    API->>DB: Create owner + secure temporary credentials
-    DB-->>API: Created owner
-    API-->>UI: 201 OwnerProvisioned (temporary_password shown once)
-    Note over Vet,Owner: Vet gives temporary password in person (outside system)
-    Owner->>UI: Enter email + temporary password
-    UI->>API: POST /auth/login (public)
-    API->>Auth: Validate credentials
-    Auth->>DB: Verify credential state
-    DB-->>Auth: Valid; password change required
-    Auth-->>API: LoginResult
-    API-->>UI: 200 {access_token, must_change_password: true, ...}
-    UI-->>Owner: Show mandatory change-password screen
-    Owner->>UI: Submit old + new password
-    UI->>API: POST /auth/change-password (bearer)
-    API->>Auth: Validate old/new; apply credential change
-    alt Valid new password
-        Auth->>DB: Save secure replacement; invalidate prior tokens
-        DB-->>Auth: Updated
-        Auth-->>API: Change accepted
-        API-->>UI: 204 No Content
-        UI-->>Owner: Enter normal authorized portal
-    else Wrong old / unchanged new password
-        Auth-->>API: Validation rejected
-        API-->>UI: 422 application/problem+json
-        UI-->>Owner: Correct password entry
-    end
-    Note over API,Auth: Missing/invalid bearer on protected endpoints: 401; wrong role: 403
-```
-
-**Checks to cite:** `POST /pet-owners` vet-only (`201`); `POST /auth/login` public (`200`, invalid credentials `401`, rate-limit `429`); `POST /auth/change-password` (`204`, validation `422`). The API states password replacement invalidates tokens issued before change. Password hashing/token revocation implementation is not specified by OpenAPI.
-
-## 6. Sequence Diagram 2 — Conflict-Controlled Manual Appointment (US-11, US-12)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Owner as Pet Owner
-    actor Vet as Veterinarian
-    participant UI as Vet Calendar UI
-    participant API as REST API
-    participant RBAC as Authorization
-    participant Cal as Calendar/Appointment Service
-    participant DB as Data Store
-    Owner->>Vet: Request appointment by telephone / in person
-    Note over Owner,Vet: No online booking API or approval queue
-    Vet->>UI: Select owner, pet(s), start/end time
-    UI->>API: POST /appointments (vet bearer; owner_id, pets, starts_at, ends_at)
-    API->>RBAC: Require VETERINARIAN and valid owner-pet linkage
-    alt Missing token or wrong role
-        RBAC-->>API: Reject (401 / 403)
-        API-->>UI: Authorization error
-    else Role and objects permitted
-        RBAC-->>API: Authorized
-        API->>Cal: Check end > start; duration >= 10 min
-        Cal->>Cal: Check weekly hours, blocks, busy-times and overlaps
-        alt Bad interval or outside permitted schedule
-            Cal-->>API: Validation rejection
-            API-->>UI: Documented validation error (422 when applicable)
-        else Conflicting active appointment
-            Cal-->>API: Conflict
-            API-->>UI: 409 Conflict
-        else Valid free interval
-            Note over Cal,DB: Proposed atomic write + concurrent conflict safeguard (not implemented yet)
-            Cal->>DB: Verify free slot and persist CONFIRMED appointment atomically
-            alt Concurrent transaction takes slot first
-                DB-->>Cal: Conflict / cannot confirm
-                Cal-->>API: Conflict
-                API-->>UI: 409 Conflict
-            else Booking recorded
-                DB-->>Cal: Saved appointment
-                Cal-->>API: Appointment (CONFIRMED)
-                API-->>UI: 201 Created
-                UI-->>Vet: Show booked interval in private calendar
-            end
+    participant Auth as Ownership / RBAC
+    participant DB as Clinical Record Store
+    Owner->>UI: Choose one of own registered pets; open Medical Records
+    UI->>API: GET /pets/{petId}/medical-records (owner bearer)
+    API->>Auth: Authenticate and check pet.owner_id == current owner
+    alt Not authenticated / pet owned by another account
+        Auth-->>API: Reject access (401 or owner-scoped 404)
+        API-->>UI: No clinical data disclosed
+    else Owner is authorized
+        Auth-->>API: Read permitted
+        API->>DB: Read pet's non-soft-deleted clinical records, newest first
+        DB-->>API: Active veterinarian-managed records (may be empty)
+        API-->>UI: 200 MedicalRecordList sorted reverse chronologically
+        alt Records present
+            UI-->>Owner: Show populated examination, diagnosis, treatment, medication and vet note fields
+            Note over UI,Owner: Omit optional unrecorded fields; no create/edit/delete actions
+        else No visible records
+            UI-->>Owner: Display informative empty-state message
         end
     end
-    Note over API,Cal: Public GET /availability/calendar shows BUSY time, not owner/pet/visit details
+    Note over API,DB: Restored record may reappear after vet restoration; never expose soft-deleted records
 ```
 
-**Nuance:** The validation code for every out-of-hours/busy-time case is **not universally pinned** by all response descriptions; use `409` for the documented appointment conflict and do not invent a precise error code for unqualified behavioral rejections. Cancellation is a `PATCH /appointments/{appointmentId}` with `status: CANCELLED`; it remains in history but frees the interval.
+**Seven requirements from FR-08:** show records for selected pet; newest-first ordering; display **all populated veterinarian-managed fields** (examination details, diagnoses, treatments, medications and veterinarian notes); omit empty optional values; owner has **no** create/update/delete; hide soft-deleted records unless vet restores; show informative empty state. **AC-01–AC-08** additionally prohibit cross-owner access. `GET /pets/{petId}/medical-records` already declares PET_OWNER and VETERINARIAN roles, pagination and a **“Most recent first”** 200 response in published API v0.6.3. Filtering of soft-deleted records, full populated-field presentation and UI empty-state still require explicit backend/frontend verification. Vet management remains US-07; do not model an owner as a clinical record editor.
 
-## 7. Sequence Diagram 3 — Vaccination and In-App Reminder (US-09, US-10)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Vet as Veterinarian
-    actor Owner as Pet Owner
-    participant UI as Web UI
-    participant API as REST API
-    participant Vacc as Vaccination/Reminder Module
-    participant DB as Data Store
-    Vet->>UI: Enter administered vaccine and optional next_due_date
-    UI->>API: POST /pets/{petId}/vaccinations (vet bearer)
-    API->>Vacc: Validate vet role, authorized pet, required fields
-    Vacc->>DB: Persist VaccinationRecord
-    DB-->>Vacc: Created vaccination
-    Vacc-->>API: VaccinationRecord
-    API-->>UI: 201 Created
-    Note over Vacc,DB: Reminder is computed from vet-entered next_due_date (storage strategy TBD)
-    Owner->>UI: Open vaccination reminders
-    UI->>API: GET /vaccination-reminders (owner bearer)
-    API->>Vacc: Restrict to owner's pets and determine due-date status
-    Vacc->>DB: Read eligible pet + vaccine records
-    DB-->>Vacc: Authorized vaccine data
-    Vacc-->>API: Active reminders (UPCOMING / DUE_TODAY / OVERDUE)
-    API-->>UI: 200 ReminderList
-    UI-->>Owner: Display website-only reminder
-    opt Vet records a subsequent linked vaccination
-        Vet->>UI: Link new vaccination to previous_vaccination_id
-        UI->>API: POST /pets/{petId}/vaccinations
-        API->>Vacc: Validate linkage and update reminder lifecycle
-        Vacc->>DB: Persist linked vaccination
-        DB-->>Vacc: Saved
-        Vacc-->>API: New record; previous reminder becomes COMPLETED
-        API-->>UI: 201 Created
-    end
-    opt Vet clears next_due_date or pet is marked deceased
-        Vet->>UI: Update vaccine/pet record
-        UI->>API: PATCH appropriate veterinarian-only endpoint
-        API->>Vacc: Recalculate reminder lifecycle
-        Vacc-->>API: Previous active reminder is DISCONTINUED
-        API-->>UI: 200 Updated resource
-    end
-    Note over Owner,UI: No external SMS, email or push service
-```
-
-**Status meaning:** `UPCOMING` from 7 days before vet-entered due date, `DUE_TODAY` on the date, `OVERDUE` after; `COMPLETED` after a linked administered vaccination and `DISCONTINUED` for a cleared next due date or deceased pet. These status names come from OpenAPI; the calculation/storage mechanism is a proposed design. The default endpoint returns only active reminders; completed/discontinued results require an explicit status filter.
-
-## 8. Sequence Diagram 4 — Privacy-Safe Public Calendar (US-11, NFR-02)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Visitor as Public Visitor / Owner
-    participant UI as Calendar View
-    participant API as REST API
-    participant Cal as Calendar Service
-    participant DB as Data Store
-    participant Projection as Public Availability Projection
-    Visitor->>UI: Open day/week availability
-    UI->>API: GET /availability/calendar (no bearer required)
-    API->>Cal: Request intervals for selected date range
-    Cal->>DB: Read working hours, blocks, legacy busy-times and confirmed appointments
-    DB-->>Cal: Internal schedule data (may include private appointment objects)
-    Cal->>Projection: Derive time coverage and statuses
-    Projection->>Projection: Strip IDs, owner/pet names and visit details
-    Projection-->>API: AvailabilityCalendar (timezone, intervals, clinic_phone_number, view)
-    API-->>UI: 200 application/json
-    UI-->>Visitor: AVAILABLE / BUSY / CLOSED times and clinic phone
-    Note over API,Projection: The public route never returns raw Appointment or VeterinarianCalendar objects
-```
-
-**Why the fourth scenario?** Public calendar privacy is one of the project's highest-risk architectural boundaries. This extra diagram remains within **architecture/UML** ownership; it does not write QA tests or frontend screens for another teammate.
-
-## 9. State Machine A — Appointment Lifecycle
+## 13. State Machine C — Guided Tour (Account State)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CONFIRMED : Vet creates valid manual appointment / POST 201
-    CONFIRMED --> CONFIRMED : Vet edits or reschedules; revalidate time & conflicts
-    CONFIRMED --> CANCELLED : Vet cancels / PATCH status=CANCELLED
-    CANCELLED --> [*] : Remains archived in history; not BUSY
-    note right of CONFIRMED
-       Appointment occupies calendar time.
-       Only veterinarian may create/edit.
-    end note
-    note right of CANCELLED
-       No time held; historical record retained.
-       Reconfirmation is not specified by contract.
-    end note
+  [*] --> NotStarted : Owner provisioned
+  NotStarted --> NotStarted : First login; temporary password change pending
+  NotStarted --> ActiveTour : Password changed and first dashboard visit
+  ActiveTour --> Completed : Finish all four steps
+  ActiveTour --> Skipped : Skip at any step
+  Completed --> Replay : Replay from Help
+  Skipped --> Replay : Replay from Help
+  Replay --> Completed : Exit replay, prior COMPLETED retained
+  Replay --> Skipped : Exit replay, prior SKIPPED retained
 ```
 
-**Exact enum:** `Appointment.status ∈ {CONFIRMED, CANCELLED}`. There is no `PENDING_APPROVAL`, `REJECTED` or owner online booking state. The `[ * ]` start/end markers are **UML pseudostates**, not extra API statuses. Transition from `CANCELLED` to `CONFIRMED` is deliberately **not** modeled because its behavior is not clearly guaranteed by the published contract.
+**Modeling nuance:** `ActiveTour` and `Replay` are UI-only states; the persisted status is **Not Started, Completed, or Skipped**. The replay arrows intentionally preserve the preexisting persisted state.
 
-## 10. State Machine B — Vaccination Reminder Lifecycle
+## 14. SRS / OpenAPI reconciliation checklist
 
-```mermaid
-stateDiagram-v2
-    [*] --> NotVisible : New record with future next_due_date
-    state "Before 7-day window (derived view)" as NotVisible
-    NotVisible --> UPCOMING : 7 days before due_date
-    UPCOMING --> DUE_TODAY : Date becomes due_date
-    DUE_TODAY --> OVERDUE : Date passes due_date
-    UPCOMING --> COMPLETED : New linked administered vaccination
-    DUE_TODAY --> COMPLETED : New linked administered vaccination
-    OVERDUE --> COMPLETED : New linked administered vaccination
-    NotVisible --> DISCONTINUED : Due date cleared / pet deceased
-    UPCOMING --> DISCONTINUED : Due date cleared / pet deceased
-    DUE_TODAY --> DISCONTINUED : Due date cleared / pet deceased
-    OVERDUE --> DISCONTINUED : Due date cleared / pet deceased
-    COMPLETED --> [*]
-    DISCONTINUED --> [*]
-    note right of NotVisible
-        Not an API status.
-        Only an internal/visibility concept.
-    end note
-```
-
-**Exact OpenAPI status enum:** `UPCOMING | DUE_TODAY | OVERDUE | COMPLETED | DISCONTINUED`. `NotVisible` is a **diagram-only lifecycle phase** before the 7-day display window, not a field value returned by the API. Changing a due date can recalculate the derived state; no automated scheduler, specific cron process or persisted reminder table has been confirmed. Status history and edge-case policy need technical review.
-
-## 11. UML-to-API design consistency summary
-
-| Rule | UML coverage | Evidence and limitations |
+| Requirement | UML target | v0.6.3 alignment |
 |---|---|---|
-| No owner online booking | Use Case, Manual Appointment sequence, Appointment state | Only veterinarian may `POST /appointments` and `PATCH /appointments/{appointmentId}`; offline contact is external |
-| First-password replacement | Sequence 1 | `must_change_password`, `POST /auth/change-password 204`; token lifecycle contract, not implementation |
-| Ownership / RBAC | Use Case, Class A, Sequences 1–3 | API `x-roles`; private cross-owner objects `404`; verify runtime later |
-| Owner diary, vet read-only | Class A, Use Case | `/observations` owner writes, vet reads; missing day not healthy |
-| Clinical record ownership | Class A, Use Case | Vet writes `/medical-records`; owner reads |
-| Reminder state semantics | Sequence 3, State B | Due date from vet, no diagnosis, no external notifications |
-| Calendar privacy | Sequence 4, Class B, Use Case | `AvailabilityCalendar` is a separate public response, not a raw `Appointment` |
-| Interval and concurrency | Sequence 2, State A | 10-minute minimum; proposed atomicity, **no executed test** |
-| Theme and clinic phone | Class B, Use Case | `ThemePreference`, `ClinicContact`, public contact response |
+| Stable Owner ID separate from phone; phone mandatory; Owner-ID login | Classes A; Sequence 1 | **Mismatch — API change required** |
+| Life stage + exact/estimated DOB + microchip status | Class A | **Mismatch — schema extension** |
+| Official vs personal pet photos | Class A; role links | **Partially represented**, media access still open |
+| **Soft-delete / restore** clinical record, don't cascade (SRS SI-07) | Class A; access rules | **Gap — no DELETE or restore operation** |
+| Vaccination records cannot be deleted | Class A; Sequence 3 | **Matches no-delete intent** |
+| Reminder Scheduled/Due/Suppressed, read status independent | Class A; Sequence 3; State B | **Mismatch** |
+| Owner available-only weekly calendar; not public details | Sequence 4 | **Mismatch** to public time/status API |
+| Hard appointment overlap / soft out-of-hours override | Sequence 2 | **Mismatch** |
+| Appointment Scheduled/Completed/Canceled; notifications | Class B; State A; Sequence 2 | **Mismatch** |
+| US-14 onboarding and account persistence | Use Case; Sequence 5; State C | **New P2 feature; contract missing** |
+| **FR-08** owner-only clinical history | Use Case, Class A, Sequence 6 | **GET + newest-first already in OpenAPI**; soft-deleted exclusion, optional-field presentation and empty state need verification; 69-page PDF still needs section 3.8 insertion |
 
-## 12. Peer-review checklist
+## 15. Peer review gate
 
-- [x] All **13** current user stories represented by the use-case overview.
-- [x] Classes use exact current OpenAPI response/request fields and distinguish response models from persistence decisions.
-- [x] Three specifically requested sequence flows covered; fourth privacy flow added within architect scope.
-- [x] Appointment and reminder state machines use exact contract statuses; noncontract states explicitly labeled conceptual.
-- [x] No owner online booking, approval queue, React requirement, external SMS/email, billing or automatic diagnosis.
-- [ ] Verify forthcoming Deniz Sprint 2 SRS against actors, actions, classes and states.
-- [ ] Resolve outstanding backend framework and busy-time precedence decisions with technical team.
-- [ ] Request peer review, link the architect's Issue/PR and record review decisions.
+- [x] Updated UML and PlantUML against the **supplied** SRS including US-14.
+- [x] Distinguish SRS-target behavior from live OpenAPI 0.6.3.
+- [x] Specify hard appointment conflict and overrideable working-hours warning separately.
+- [x] Model owner-only photos, read-only owner appointments and four-step account-persisted tour.
+- [x] **FR-08** supplied as separate Must Have requirement, with seven functional requirements and eight acceptance criteria; modeled in owner-only Use Case and Sequence 6.
+- [ ] Product Owner integrates FR-08 into main 69-page SRS as §3.8, removes repeated §3.7, and confirms owner calendar access policy.
+- [ ] API owner approves new field names, statuses, notification and onboarding contracts.
+- [ ] Technical team incorporates the SRS-selected Django/MySQL stack in its implementation architecture and approves data lifecycle/consistency design.
+- [ ] Render/compile PlantUML and Mermaid in repository preview; implementation/testing not claimed.
 
-**Related documents:** [`../architecture/c4-architecture.md`](../architecture/c4-architecture.md) · [`../architecture/api-srs-alignment.md`](../architecture/api-srs-alignment.md).  
-**Source honesty:** These diagrams are **design artifacts**. No implementation, database migration or API test has been verified by the diagrams themselves.
+**Related:** [SRS delta and issue ledger](../architecture/srs-2026-11-20-review.md) · [C4](../architecture/c4-architecture.md) · [API alignment](../architecture/api-srs-alignment.md).  

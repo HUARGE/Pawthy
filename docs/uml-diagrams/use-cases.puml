@@ -1,4 +1,4 @@
-@startuml Pawthy_Use_Cases_Sprint2
+@startuml Pawthy_Use_Cases_Sprint2_SRS_20261120
 left to right direction
 skinparam packageStyle rectangle
 skinparam usecaseBorderColor #45676A
@@ -8,21 +8,26 @@ actor "Pet Owner" as Owner
 actor "Veterinarian / Administrator" as Vet
 actor "Public Visitor" as Public
 
-rectangle "Pawthy Pet Health Portal" {
- usecase "US-01 Create Owner Accounts" as UC01
- usecase "US-02 First Login and Password Change" as UC02
- usecase "US-03 Enforce Role and Ownership Access" as UC03
- usecase "US-04 Manage Pet Profiles" as UC04
- usecase "US-05 Record Health Observations" as UC05
- usecase "US-06 Review Diary History" as UC06
- usecase "US-07 Manage Veterinary Medical Records" as UC07
- usecase "US-08 View Medical Records" as UC08
- usecase "US-09 Manage Vaccination Information" as UC09
- usecase "US-10 View Vaccination Reminders" as UC10
- usecase "US-11 Manage / View Availability" as UC11
- usecase "US-12 Manage Manual Appointments" as UC12
- usecase "US-13 Switch Light / Dark Theme" as UC13
- usecase "View Public Calendar / Clinic Phone" as UCP
+rectangle "Pawthy Pet Health Portal (proposed design)" {
+ usecase "US-01 Provision Owner Account\n(Full Name + Phone, independent Owner ID)" as UC01
+ usecase "US-02 Owner ID Login /\nChange Temporary Password" as UC02
+ usecase "US-03 Enforce Role /\nRecord Ownership" as UC03
+ usecase "US-04 Maintain Official Pet Profile" as UC04
+ usecase "US-04 Manage Own Pet Gallery\nand Archive Own View" as UC04O
+ usecase "US-05 Record / Edit Own Diary" as UC05
+ usecase "US-06 View Diary History\nand Symptom Frequencies" as UC06
+ usecase "US-07 Manage Clinical Records\n(Soft Delete / Restore)" as UC07
+ usecase "FR-08 / US-08 View Own\nVeterinary Clinical Records (Read Only)" as UC08
+ usecase "US-09 Maintain Vaccination Records" as UC09
+ usecase "US-10 View / Mark Read\nVaccination Reminders" as UC10
+ usecase "US-11 Manage Weekly Hours\nand Date Exceptions" as UC11V
+ usecase "US-11 View Available Intervals\n(Read Only)" as UC11O
+ usecase "US-12 Manage Manual Appointments\n(+ Confirm Out-of-Hours Warning)" as UC12V
+ usecase "US-12 View Own Appointments\nand Change Notifications" as UC12O
+ usecase "US-13 Select Light / Dark Mode" as UC13
+ usecase "US-14 First Login Guided Tour\n(Optional, P2)" as UC14
+ usecase "US-14 Replay Tour From Help" as UC14R
+ usecase "View Clinic Contact Number" as UCC
 }
 
 Vet -- UC01
@@ -31,34 +36,66 @@ Owner -- UC02
 Vet -- UC03
 Owner -- UC03
 Vet -- UC04
-Owner -- UC04
+Owner -- UC04O
 Owner -- UC05
 Owner -- UC06
 Vet -- UC06
 Vet -- UC07
 Owner -- UC08
-Vet -- UC08
 Vet -- UC09
 Owner -- UC10
 Vet -- UC10
-Vet -- UC11
-Vet -- UC12
+Vet -- UC11V
+Owner -- UC11O
+Vet -- UC12V
+Owner -- UC12O
 Owner -- UC13
 Vet -- UC13
-Public -- UCP
-Owner -- UCP
-Vet -- UCP
+Owner -- UC14
+Owner -- UC14R
+Owner -- UCC
+Vet -- UCC
+Public -- UCC
 
-note right of UC11
-Vet manages weekly hours and blocks.
-Owner/public only views privacy-safe calendar.
+note right of UC01
+ Owner ID is a stable system-generated identifier,
+ independent from required phone number.
+ No owner self-registration.
 end note
-note right of UC12
-No owner-initiated online booking.
-Appointments are agreed by phone or in person.
+note right of UC11O
+ SRS FR-11.10: authenticated owner sees only
+ AVAILABLE intervals and clinic phone.
+ Existing OpenAPI publishes BUSY/CLOSED publicly.
+ Contract revision pending.
+end note
+note right of UC12V
+ No owner online booking.
+ Active appointment overlap: reject.
+ Outside normal working hours: warning plus
+ explicit vet confirmation permitted if no overlap.
+end note
+note right of UC14
+ Show after successful initial password change.
+ Four steps: My Pets, Health Diary, Health Records,
+ Vaccinations & Reminders. Next / Back / Skip;
+ Completed/Skipped persisted per account.
+ Replay must not reset stored status.
+end note
+note bottom of UC08
+ FR-08 is supplied separately in the team's
+ slide screenshots starting at page 31/222;
+ priority MUST HAVE; actor Pet Owner only.
+ Verify owner-to-pet association on server.
+ Show newest first and all populated vet fields;
+ omit optional unpopulated fields.
+ Hide soft-deleted clinical records until
+ veterinarian restores them.
+ No owner create/update/delete controls;
+ show informative empty state when none.
+ 69-page PDF still needs section 3.8 repair.
 end note
 note bottom of UC03
-Cross-cutting authorization rule,
-not a separate interface page.
+ Cross-cutting SERVER-side authorization,
+ not a permission editing screen.
 end note
 @enduml

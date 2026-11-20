@@ -1,188 +1,113 @@
-# Pawthy — Architecture / API / SRS Alignment Review (Sprint 2)
+# Pawthy — Architecture / SRS / OpenAPI Alignment (Sprint 2)
 
-> **Reviewer / owner:** Efe — Software Architect · **Review baseline:** 2026-11-19 · **Status:** **DESIGN REVIEW ONLY — formal Sprint 2 SRS review pending**  
-> **Primary sources:** `develop` @ `a5c08a8534c8e6512f6621628bf751b434977d83`; `api/openapi.yaml` (OpenAPI 3.1.0, `info.version 0.6.3`); `docs/sprint-reports/Pawthy_Sprint1_Team10-1.md` (v0.5).  
-> **Related QA documents:** separately shared `non-functional-requirements.md`, `quality-measures.md`, `test-scenarios.md`; those remain QA-owned, not modified by this review.
+> **Architect:** Efe · **Review date:** 20 November 2026 · **Status:** Requirements-to-design cross-check completed; **API contract alignment, implementation and test execution are NOT complete**.  
+> **Requirements evidence:** Deniz's 69-page updated Functional Requirements SRS, five-page supplementary *5.2 Software Interfaces* and subsequently supplied **FR-08 View Veterinary Clinical Records** screenshots (screenshots starting on slide 31/222, Must Have). SRS is not committed to the repository in this PR.  
+> **Technical contract checked:** `HUARGE/Pawthy:develop`, `api/openapi.yaml` OpenAPI **3.1.0 / version 0.6.3**. That published contract still describes some prior Sprint 1 behavior.  
+> **Detailed references:** [Requirement discrepancy ledger](srs-2026-11-20-review.md) · [API owner change proposal](../../api/srs-sync-proposal-2026-11-20.md) · [C4](c4-architecture.md) · [UML](../uml-diagrams/uml-diagrams.md).
 
-## 1. Scope and review method
+## 1. Precedence, methodology and interpretation
 
-The architect's assigned task is to **verify that the proposed architecture and UML are consistent with the current API and requirements**, not to rewrite a teammate's SRS, change the API specification, run QA tests or deploy the system. The review consists of:
+1. Read the provided new Functional Requirements SRS and separate **supplementary Software Interfaces 5.2**. The supplement selects **HTML/CSS/JavaScript, Python/Django, MySQL and OpenAPI/YAML**. Browser-to-MySQL direct access is forbidden. Backend validates, authorizes, preserves referential integrity and distinguishes ordinary modifications, **soft deletion**, archival, restoration and deceased status (SI-01–SI-07).
+2. Inventory relevant routes and request/response models in version 0.6.3. This is **the published working contract**, not a guarantee of feature implementation.
+3. Update architect-owned C4 and UML for SRS target behavior. Where it conflicts with v0.6.3, mark **CONFLICT**; do not silently change `api/openapi.yaml` or teammate documents.
+4. Keep Product Owner, API author, QA and implementation responsibilities distinct. A recorded gap is not a failed test; a proposed diagram is not a deployment.
+5. **FR-08 content is now supplied separately:** Seven functional requirements and eight acceptance criteria define owner-only clinical read access, newest-first records, all populated veterinarian-managed fields, no empty optional fields, no owner mutations, soft-deleted exclusion, cross-owner denial and informative empty state. The 69-page SRS PDF **still** repeats §3.7 and lacks §3.8; only consolidation into the canonical PDF remains an editorial request.
 
-1. Identify the current contract and correct product scope from Sprint 1 and the team's later messages.
-2. Map all **13 current User Stories** to REST operations and to the C4/UML views created in this submission.
-3. Check architectural boundaries: roles/ownership, public versus private calendar, manual appointment life cycle, diary/vaccine rules, static frontend and persistence assumptions.
-4. Review all **15 QA NFRs** for **design implications**, without declaring metrics proven or claiming the 24 scenarios have run.
-5. Record specific mismatches, uncertainty, validation actions and a final-SRS review gate.
+**Review states:** DESIGN MAPPED = documented in C4/UML; CONTRACT CONFLICT = existing API lacks or contradicts SRS; OPEN = team must decide; TEST NOT RUN = no execution evidence.
 
-**Verification vocabulary:**
+## 2. User Story → OpenAPI → C4/UML traceability
 
-| Label | Interpretation |
-|---|---|
-| **Aligned (design)** | Current Sprint 1 story and current OpenAPI agree about the modeled rule; no implementation/test proof implied |
-| **Proposed** | Decomposition/technology/transaction approach is a design recommendation not mandated by the contract |
-| **Open** | A source gap or conflicting team design statement requires an explicit decision |
-| **Pending SRS** | The separate Sprint 2 SRS has not yet been inspected, so formal SRS compliance cannot be concluded |
-| **Not Run** | Testing/measurement has not been carried out in the supplied evidence |
-
-### 1.1 Source integrity and precedence
-
-| Material checked | Result / guidance |
-|---|---|
-| Live GitHub `develop` | Contains `api/openapi.yaml`, Sprint 1 report, original context PNG, ADR template, CI/CD plan and contribution guidance. **No newly authored `docs/SRS.md` was present at checked HEAD.** |
-| Live GitHub `main` + uploaded `Pawthy-main.zip` | Same **current API content**; ZIP is from `main` HEAD `337d9eb2addae6ee496504891a4ee4a3047a54d3`; `develop` also includes new documentation structure |
-| `api/openapi.yaml` | API version **0.6.3**; inventory checked: **36 paths / 54 operations / 63 schemas** |
-| Historical repo YAML `api/pawthy_openapi_v0.3.0.yaml` | **Not** the current architecture basis |
-| Separately uploaded `pawthy_openapi_updated.yaml` | Old **v0.2.0** draft that supports owner appointment requests/approval; contradicts current scope and is not used as primary source |
-| Separately uploaded `pet_health_portal_initial_backlog_updated.md` | Older **14-story** backlog with `PENDING_APPROVAL` request flow; superseded by current Sprint 1 **13-story** requirements |
-| Uploaded Sprint 2 NFR + quality + scenarios | Explicitly refer to OpenAPI v0.6.3; define acceptance criteria; **tests not executed** |
-| WhatsApp screenshots and `sprint 2 planlamasi.txt` | Efe owns C4, UML, API/SRS alignment; frontend changed to HTML/CSS/JS, and preliminary architect task text identifies use-case, class, sequence and state models |
-| `docs/devops/ci-cd-plan.md` | Proposes backend framework **Django or FastAPI**, Nginx/static frontend and future Docker deployment; not a final runtime guarantee |
-
-The formal Sprint 2 SRS (Deniz's deliverable) **must be checked when available**, rather than filling any missing SRS requirement with an assumption.
-
-## 2. User Story → API → Architecture traceability (all US-01–US-13)
-
-| Story | Current user goal and role boundary | Contract operations / important schemas | Architecture & UML coverage | Design assessment |
+| Story | New SRS requirement | Current v0.6.3 API evidence | C4 / UML coverage | Assessment |
 |---|---|---|---|---|
-| **US-01** Create owner accounts | **Vet only** creates owner records, generates temporary password shown once; owner cannot register | `POST /pet-owners` (`OwnerAccountRequest`, `OwnerProvisioned`); `POST /pet-owners/{ownerId}/temporary-password` | C4 Auth/Owner modules; Use Case; Sequence 1 | **Aligned (design)** |
-| **US-02** First login/password change | Owner must change temporary password; old credentials/tokens invalidated | `POST /auth/login` (`LoginResult.must_change_password`), `POST /auth/change-password`, `POST /auth/logout` | C4 Auth module; Sequence 1 | **Aligned (design)**; token storage/revocation not yet designed |
-| **US-03** Role-based access | Owner own pets/diary; vet professional data; other-owner private records blocked | `x-roles`, bearer security, `401`/`403`/private `404` across endpoints | C4 trust boundaries; Use Case; Classes; all protected flows | **Aligned (design)**; runtime access matrix **Not Run** |
-| **US-04** Pet profiles | Vet controls pet identity and clinical photo; owner only personal notes/photos and archive | `GET /pets`, `POST /pet-owners/{ownerId}/pets`, `GET/PATCH /pets/{petId}`, `GET/PATCH /pets/{petId}/personal-details`, `PATCH /pets/{petId}/archive`, photo endpoints; `Pet` | C4 Owner/Pet + protected media; Class A; Use Case | **Aligned (design)**; photo delivery policy **Open** |
-| **US-05** Record diary | Owner enters/edits/deletes multiple timestamped health observations; vet read-only | `GET /symptoms`, `GET/POST /pets/{petId}/observations`, `PATCH/DELETE /pets/{petId}/observations/{observationId}`; `Observation`, `ObservationItem` | C4 Diary module; Class A; Use Case | **Aligned (design)** |
-| **US-06** Review diary history | Both permitted roles see dates and symptom frequency, never diagnose or infer healthy missing days | `GET /pets/{petId}/observations`, `GET /pets/{petId}/observation-statistics`; `DiaryStatistics` | C4 Diary read model; Class A; Use Case | **Aligned (design)** |
-| **US-07** Manage vet clinical records | Vet creates/edits records with minimally required visit data; owner cannot write | `GET/POST /pets/{petId}/medical-records`, `PATCH /pets/{petId}/medical-records/{recordId}`; `MedicalRecord` | C4 Medical module; Class A; Use Case | **Aligned (design)** |
-| **US-08** View medical history | Authorized owner reads vet records for own pet; vet reads authorized clinic records | `GET /pets/{petId}/medical-records`; `MedicalRecordList` | C4 Medical module; Class A; Use Case | **Aligned (design)** |
-| **US-09** Manage vaccination | Vet records vaccines and optional next due dates, supports linked new vaccination | `GET /species/{speciesCode}/vaccines`, `GET/POST /pets/{petId}/vaccinations`, `PATCH /pets/{petId}/vaccinations/{vaccinationId}`; `VaccinationRecord` | C4 Vaccination; Class A; Sequence 3 | **Aligned (design)** |
-| **US-10** Vaccination reminders | Owner sees own; vet clinic-wide; 7-day upcoming / due / overdue; linked completion; deceased suppresses | `GET /vaccination-reminders`; `VaccinationReminder` status enum | C4 Vaccination; Class A; Sequence 3; State B | **Aligned (design)**; computation/storage mechanism **Proposed** |
-| **US-11** Appointment availability | Vet manages weekly schedule, explicit available/busy blocks and exceptions; owner/public view private-safe times and phone | `GET/PUT /veterinarian/schedule`; `GET/POST /availability/blocks`, `PATCH/DELETE /availability/blocks/{blockId}`; `/busy-times`; `GET /availability/calendar`; `GET/PATCH /clinic/contact` | C4 Calendar and Public Projection; Class B; Sequence 4; Use Case | **Aligned (design)**; precedence between legacy/visual blocks **Open** |
-| **US-12** Manual appointments | **Vet only** records/edits/cancels phone/in-person appointments; owner may read own history, never online book | `GET/POST /appointments`, `GET/PATCH /appointments/{appointmentId}`, `GET /veterinarian/calendar`; `ManualAppointmentInput`, `Appointment` | C4 Calendar; Class B; Sequence 2; State A; Use Case | **Aligned (design)**; atomic conflict design **Proposed** |
-| **US-13** Theme | Owner and vet manually switch per-user saved Light/Dark preference | `GET/PATCH /me/theme`; `ThemePreference` | C4 UI Preferences; Class B; Use Case | **Aligned (design)** |
+| US-01 | Vet-created owner, required full name + phone, generated immutable ID independent of phone | `POST /pet-owners`; `OwnerAccountRequest` currently **requires email** | Owner service, Class A, first-login Sequence | **CONFLICT** |
+| US-02 | Login **by Owner ID**, one-time temp password, forced change, vet reset | `POST /auth/login` expects email; change-password exists | Auth service, Sequence 1 | **CONFLICT** |
+| US-03 | Server RBAC, owner/pet isolation, private photos | bearer auth and `x-roles` declared; actual access not verified | Auth trust boundary and actor rights | DESIGN MAPPED, TEST NOT RUN |
+| US-04 | Vet-controlled life stage and Exact/Estimated DOB, chip status; clinic/private photo split | `Pet` missing accuracy, life stage, chip-status fields; photos exist | Profile service, Class A | **CONFLICT** |
+| US-05 | Owner diary, past observation vs creation time, no future entries | `/observations` endpoints | Diary service, Class A | PARTIAL; validation detail OPEN |
+| US-06 | Distinct symptom **days**, no default healthy days; period filters | `/observation-statistics` | Diary service and data calculations | PARTIAL; aggregation check OPEN |
+| US-07 | Vet clinical CRUD; **soft deletion + restoration** per SI-07; no diary/vaccine cascade | `/medical-records` GET/POST/PATCH; **no DELETE/restore** | Clinical service, Class A | **CONFLICT** |
+| **FR-08 / US-08** | **Must Have; Pet Owner** with authenticated ownership; own records newest-first, all populated vet fields, omit unpopulated optional fields, no create/edit/delete, soft-deleted hidden until vet restores, empty-state and cross-owner denial (**FR 1–7, AC-01–08**) | **GET `/pets/{petId}/medical-records` already supports PET_OWNER**, `200` says **Most recent first**, `401/403/404` and paginated `MedicalRecordList`; soft-delete exclusion, optional-field display and empty-state are not explicitly verified | Owner-only Use Case, Class A, **Sequence 6** | **PARTIALLY ALIGNED**, remaining data lifecycle/UI tests, **not a missing user story** |
+| US-09 | Vet vaccine creation/update; no vaccination delete | GET/POST/PATCH vaccine operations | Vaccination service, Class A | Broadly compatible; test not run |
+| US-10 | Scheduled/Upcoming/Due/Overdue/Completed/Suppressed reminder plus independent **mark read** | Reminder enum lacks Scheduled/Suppressed; no mark-read | Reminder service, Class A, State B | **CONFLICT** |
+| US-11 | Vet editable day/week exceptions; Owner authenticated **available-only** weekly view and phone | Public `GET /availability/calendar` returns AVAILABLE/BUSY/CLOSED; `/busy-times` and `/availability/blocks` coexist | Calendar component, available-only Sequence | **CONFLICT** |
+| US-12 | Vet manual only, >=10 min, hard overlap rejection, **acknowledged soft out-of-hours override**, Scheduled/Completed/Canceled, in-app owner notices | `/appointments` excludes out-of-hours, enum CONFIRMED/CANCELLED; notices absent | Appointment, Notice, Class B, Sequence 2, State A | **CONFLICT** |
+| US-13 | Per-account Light/Dark preference, no clinical data changes | `GET/PATCH /me/theme` | Theme component and use case | DESIGN MAPPED |
+| US-14 | Optional P2 four-step onboarding after first-password change; status saved per account; Help replay never resets | No `guided-tour` route/schema in 0.6.3 | Tour component, Class A, Sequence 5, State C | **NEW CONTRACT GAP** |
 
-**Coverage tally:** 13 of 13 stories have a concrete API mapping and at least one architectural/UML view. This is **traceability coverage of a draft contract**, *not* 13 accepted implementation tests or 13 signed-off SRS checks.
+**Coverage:** All **14 US identifiers have source-backed functional definitions** when the separate FR-08 screenshots are read alongside the updated SRS. The canonical PDF still needs its duplicate §3.7 replaced with §3.8. This is **design traceability only**, not proof that 14 features are implemented, fully API-aligned, tested or formally approved.
 
-## 3. Explicit API and scope compatibility checks
+## 3. Important functional and access-control boundaries
 
-### 3.1 Current appointment rule — no online booking
+### 3.1 Authentication and privacy
+- Owner ID is not the phone number and must remain stable when the phone is edited; current API's required email cannot be passed off as compliant.
+- Two authenticated roles: VETERINARIAN and PET_OWNER. Public visitor is an unauthenticated context, not a third account role.
+- Vet creates and updates official identity/clinical/vax records; owner writes own diary/private gallery; vet **cannot browse the owner's personal gallery**. Owner cannot edit clinical records or appointments.
+- Backend enforces RBAC/ownership on every protected endpoint. Server responses must not leak other owners' data or raw private records via photo URLs, tour status, calendars or appointment notifications.
 
-- Source: Sprint 1 **US-11 / US-12** + API v0.6.3.
-- `POST /appointments` `x-roles: [VETERINARIAN]`. A pet owner **cannot submit** an appointment request through the app. Vet manually records the appointment **after** phone/in-person agreement.
-- The output `Appointment.status` has **only** `CONFIRMED` and `CANCELLED`. Cancellation leaves history intact but makes its interval free; reschedule requires another availability check.
-- `starts_at` and `ends_at` define the interval; at least **10 minutes** required; overlapping active bookings rejected **409**; other validation failures follow documented response semantics (do not invent an exact code where none is explicit).
-- The old v0.2.0 YAML / 14-story backlog's `PENDING_APPROVAL`, `REJECTED` and vet-approval queue **must not appear** in Sprint 2 C4/UML.
+### 3.2 Appointment transaction correctness
+- Overlap with another **active** appointment always rejects; this is **not overrideable**.
+- Outside weekly working hours or inside an unavailable interval: **warn**, then permit a veterinarian-confirmed exception only if no active overlap. A transaction must recheck conflicts at save time.
+- Do not turn surrounding hours into general available slots because one exceptional appointment was approved.
+- Cancelled appointments retain records but free calendar space; reschedule requires release/occupy consistency, and date/time change/cancellation triggers a role-scoped **in-app** notice.
+- New SRS states Scheduled/Completed/Canceled; 0.6.3 has CONFIRMED/CANCELLED; team must decide exact wire semantics and states.
 
-**Design result:** **Aligned**; no owner-initiated booking/approval models used. **Implementation verification: Not Run**.
+### 3.3 Reminders, dates and lifecycle
+- Vaccine record cannot be deleted ordinarily. Reminder completed only by linked veterinarian-entered subsequent vaccination, **not by user marking read**.
+- Owner archive hides reminders from own dashboard but leaves veterinarian overview intact; deceased pet suppresses active/future reminders while retaining history.
+- Clinical record **soft deletion and restoration** are explicitly required by Section 5.2 SI-07 and must not cascade to separately maintained diary/vaccination data.
+- Exact/Estimated DOB, veterinarian-selected life stage, chip status and partial record history are data-integrity concerns, not merely frontend labels.
 
-### 3.2 Public vs. private calendar (critical security boundary)
+### 3.4 Calendar projection and SRS delivery
+- SRS Owner weekly calendar is authenticated and **available-only**. Current 0.6.3 public projection returns available/busy/closed intervals. Product/API owner must decide whether to preserve public API or introduce a separate owner-specific projection.
+- Veterinarian schedule contains private exception/appointment content. Never send private appointments to an owner frontend and rely only on CSS to hide them.
+- Versioned OpenAPI must govern frontend↔backend data and errors. New 5.2.4 resource list is **not** an endpoint list; URL choices in [proposal](../../api/srs-sync-proposal-2026-11-20.md) are illustrative.
 
-| API | Audience | Information allowed |
+## 4. Non-functional requirements: architectural mapping only
+
+The QA-owned `non-functional-requirements.md`, `quality-measures.md`, and `test-scenarios.md` are unchanged. The original 15 NFRs are still design inputs, but changing the SRS requires QA reconciliation of test conditions.
+
+| NFR | Mapped protection | Execution status |
 |---|---|---|
-| `GET /availability/calendar` | Public `security: []` | `AvailabilityCalendar` → `timezone`, `intervals` (`starts_at`, `ends_at`, `status`), `clinic_phone_number`, optional `view`; **no raw Appointment** |
-| `GET /veterinarian/calendar` | Vet-only | `VeterinarianCalendar` with private events and appointment details |
-| `GET /appointments` | Vet and owner with role/data filtering | Vet clinic-wide; owner **own** recorded appointments only |
-| `GET /clinic/contact` | Public | Clinic phone and display message |
+| NFR-01 RBAC | Backend Auth/RBAC plus per-pet access | TEST NOT RUN |
+| NFR-02 Privacy | Separate owner available-only projection, photo and notification scoping | TEST NOT RUN |
+| NFR-03 Scheduling integrity | >=10 min, atomic hard collision, no silent override | TEST NOT RUN; fixtures must change for hours warning |
+| NFR-04 Calendar consistency | Weekly intervals + exceptions + confirmed appointment occupancy | TEST NOT RUN; busy-times precedence OPEN |
+| NFR-05 Diary ownership | Owner writes / vet read-only, missing day not normal | TEST NOT RUN |
+| NFR-06 Clinical & vaccination security | Vet-only clinical change and vaccine records, owner view | TEST NOT RUN; add restore and read-status checks |
+| NFR-07 Credential lifecycle | Password hashing, mandatory first change, revocation | TEST NOT RUN; Owner-ID login fixtures need revision |
+| NFR-08 API consistency | Request validation, OpenAPI schemas, structured error outcomes | TEST NOT RUN |
+| NFR-09 Time correctness | Clinic timezone Europe/Istanbul, local-day filters | TEST NOT RUN |
+| NFR-10 Read performance | Query planning and indexing | TEST NOT RUN |
+| NFR-11 Write performance | Database transactions and validation | TEST NOT RUN |
+| NFR-12 Availability | Deployment health checks | TEST NOT RUN |
+| NFR-13 Atomicity | No partial appointment/notification data states | TEST NOT RUN |
+| NFR-14 Calendar clarity | Vet and owner presentations separated | TEST NOT RUN; UI design is teammate-owned |
+| NFR-15 Upload validation | Protected JPEG/PNG access and size policy | TEST NOT RUN |
 
-**Architectural enforcement:** PublicCalendarProjection is a distinct backend component. Filtering or merely hiding information in the browser does **not** satisfy NFR-02. A correct response **must not** contain another owner's name, pet, clinical note or reason. Documented statuses: `AVAILABLE`, `BUSY`, `CLOSED`.
+**QA mismatch warning:** The QA cases written for OpenAPI 0.6.3 may assume outside-hours denial, CONFIRMED/CANCELLED states, public BUSY/CLOSED calendar or email login. **No acceptance claim** is possible until API/QA files are revised after PO decisions.
 
-### 3.3 Authorization and record ownership
+## 5. Outstanding team decisions and submission gate
 
-| Action | Vet | Pet Owner | Public |
-|---|---|---|---|
-| Provision owner and create vet pet identity | Create/update | No | No |
-| Read own-pet clinical history | Clinic-authorized | Own pets only | No |
-| Write vet clinical/vaccination data | Yes | **No** | No |
-| Read owner diary | Authorized clinic pets | Own pets | No |
-| Write diary entry | **No** | Own records only | No |
-| Read/edit owner-private notes/gallery | **No** | Own pets only | No |
-| Manage hours, blocks, appointments | Yes | No | No |
-| Read calendar time-only availability/contact | Yes | Yes | Yes |
-| Read/update own theme | Yes | Yes | No |
-
-**Status distinctions:** `401` missing/invalid protected bearer, `403` authenticated but disallowed role, `404` other-owner private object not accessible. The table states architectural **intended permissions**, not live enforcement evidence.
-
-### 3.4 Calendar rules and time offsets
-
-- Weekly working hours define baseline; explicit `AVAILABLE` and `BUSY` blocks adjust it. Legacy `/busy-times` adds exceptional closure/blocked periods. Noncancelled appointments count as busy. Outside working hours should be `CLOSED` unless explicit `AVAILABLE` opens them.
-- `POST /availability/blocks` and `PATCH /availability/blocks/{blockId}` document **409** for conflicting explicit blocks; do not assert exact behavior for every combination of old `/busy-times` and newer `/availability/blocks` until reviewed.
-- Appointment and calendar instants are ISO 8601 with UTC offset and Europe/Istanbul clinic semantics. Date-boundary and UTC conversion behavior requires tests; documentation alone cannot prove correctness.
-
-### 3.5 Vaccinations, diary and images
-
-- Vet vaccination writes include optional `next_due_date`; reminders appear **7 days before due date**, `DUE_TODAY` and overdue, and can finish as `COMPLETED` or `DISCONTINUED`. In-app only.
-- Diary changes are owner-managed; missing observation days remain **unknown/unrecorded**, not a default healthy state. Symptom statistics only reflect reported observations.
-- Owner gallery and private notes are not available to vet; clinical identification photo is vet-managed. An object-storage URL alone must not bypass access checks. Photo delivery/security design needs implementation review.
-
-## 4. NFR-01–NFR-15 — Architectural design review, not QA test execution
-
-| NFR | Required design safeguard or measurable target | Model location | Architect's review state |
-|---|---|---|---|
-| **NFR-01** RBAC | Protected endpoints, 401/403/private 404 and owner/pet isolation | C4 Auth boundary; UML Use Case and Sequences | **Design mapped**; TS-01–03 Not Run |
-| **NFR-02** Privacy | Public availability must reveal **0** private values | C4 Public Projection; UML Sequence 4 | **Design mapped**; TS-04 Not Run |
-| **NFR-03** Scheduling integrity | >=10 min, no confirmed overlap, correct cancellations; concurrency safeguards | Calendar component; UML Sequence 2 / State A | **Design mapped**; TS-05–08 Not Run |
-| **NFR-04** Calendar consistency | Working hours, AVAILABLE/BUSY blocks, appointment precedence; 0 fixture discrepancies | Calendar + Public Projection; Class B | **Design mapped**; precedence question **Open**; TS-09–10 Not Run |
-| **NFR-05** Diary ownership | Owner writes; vet read-only; no fabricated healthy dates | Diary component, Class A | **Design mapped**; TS-11–12 Not Run |
-| **NFR-06** Clinical/vaccine permissions | Vet write; owner read; linked reminder status transitions | Medical + Vaccination; Sequence 3 | **Design mapped**; TS-13–14 Not Run |
-| **NFR-07** Credential lifecycle | Password change/logout invalidate prior tokens; login may rate-limit with 429 | Auth component; Sequence 1 | **Design mapped**; token design **Open**; TS-15–16 Not Run |
-| **NFR-08** API consistency | `items/next_cursor` pagination; documented status/schema; problem+json | API Adapter/Controllers | **Design mapped**; TS-17 Not Run |
-| **NFR-09** Time correctness | ISO 8601 offsets; Europe/Istanbul range filtering | Calendar/Appointment module | **Design mapped**; TS-18 Not Run |
-| **NFR-10** Read latency | **p95 ≤ 2s**, unintended error rate <1%, 20 VUs / 5m | API / DB indexing & query planning *proposed* | **Acceptance target**, not measured; TS-19 Not Run |
-| **NFR-11** Write latency | **p95 ≤ 3s**, unintended error rate <1%, 10 VUs / 5m | Transaction boundary *proposed* | **Acceptance target**, not measured; TS-20 Not Run |
-| **NFR-12** Availability | **≥99%** scheduled checks over 7 days | Hosting/runtime monitoring outside logical C4 | **Acceptance target**; health endpoint not in API; TS-21 Not Run |
-| **NFR-13** Atomicity | **0 inconsistent partial states / 20** failure injections | Calendar/Reminder transaction boundaries *proposed* | **Acceptance target**, not measured; TS-22 Not Run |
-| **NFR-14** Calendar clarity | **≥4/5** participants classify availability correctly | UI semantics + public projection | **Acceptance target**; Figma/UI belongs to UI team; TS-23 Not Run |
-| **NFR-15** Upload validation | Only JPEG/PNG up to **5 MiB**, role restricted | Media service; `multipart/form-data` endpoints | **QA acceptance policy** not guaranteed by API numeric schema; TS-24 Not Run |
-
-The 15 NFRs and test references above are **reviewed as source inputs**; their authorship, execution and ownership remain with QA. No `Pass` has been assigned to a runtime criterion, because the supplied test report says **all TS-01–TS-24 are Not Run**.
-
-## 5. Issues, conflicts and architecture decisions for 22–23 November review
-
-| ID | Severity | Finding | Proposed architect action (not altering teammates' work) | Owner to confirm |
-|---|---|---|---|---|
-| **A-01** | High | **Separate Sprint 2 SRS not yet in `develop`**; cannot formally assert compliance to a document not received | Re-run story/API/UML matrix when SRS becomes available; record discrepancies and revise only our models | Deniz (SRS) + Architect |
-| **A-02** | High | Sprint 1 and WhatsApp say Django, but later CI/CD plan says **Django or FastAPI** | Keep “Python REST backend, framework TBD”; request formal decision/ADR; do not rewrite DevOps plan | Technical team |
-| **A-03** | High | Two competing calendar exception concepts: `/busy-times` and `/availability/blocks` | Document collision cases and precedence; determine whether legacy path remains supported before implementation | Backend/API owner + Architect |
-| **A-04** | High | Photo responses expose URL fields but delivery authorization and media backend are not specified | Decide protected upload/delivery strategy and owner-only vs clinical photo controls | Backend/API owner |
-| **A-05** | High | Simultaneous vet appointment requests could race; OpenAPI requires conflict rejection but does not define DB locking | Define atomic conflict checking in implementation; preserve `409` and avoid double booking | Backend/API owner |
-| **A-06** | Medium | Credential invalidation mandated but specific bearer/JWT/session revocation not designed | Document architecture decision; guarantee logout/password change invalidation in final implementation | Backend/security owner |
-| **A-07** | Medium | NFR-15 5 MiB JPEG/PNG policy is **not encoded** numerically in OpenAPI | Note as QA target and possible API clarification; do not silently change YAML | QA + API owner |
-| **A-08** | Medium | DevOps draft calls `/health` after deploy but **no `/health` in API** | Flag as separate implementation/operations decision, not an existing endpoint | DevOps + Backend |
-| **A-09** | Medium | Appointment validation has exact `409` conflict but some constraints have no universally defined HTTP error | Confirm expected per-case response codes before test automation | API owner + QA |
-| **A-10** | Medium | `develop` document layout includes `docs/architecture/`; WhatsApp task suggestions named `docs/c4-architecture/` | Place C4 and alignment docs in existing `docs/architecture/`, UML in `docs/uml-diagrams/` as new folder; confirm final path in PR | Repository maintainer |
-| **A-11** | Low | UI mockups show optional design choices; color/theme is UI team's domain | Model only user-facing capabilities; do not prescribe/implement Figma design | UI team |
-
-### 5.1 Proposed decision priority
-
-**Must resolve to finalize architecture:** A-01, A-02, A-03, A-04, A-05, A-06.  
-**Can remain tracked without inventing implementation:** A-07–A-11.  
-Do not rewrite the PO's SRS/backlog, QA's thresholds, DevOps plan, or UI designs as part of the architect's PR; bring questions to review and update **architect-owned documentation** when decisions are made.
-
-## 6. Release-independent submission gate
-
-| Check | Evidence | Status |
+| Priority | Issue | Assigned review |
 |---|---|---|
-| Current correct source version | `develop` API v0.6.3, Sprint 1 13 stories | **Verified (source inspection)** |
-| C4 Level 1 / 2 / 3 | `docs/architecture/c4-architecture.md` | **Draft complete** |
-| UML Use Case, Class, sequences, states | `docs/uml-diagrams/uml-diagrams.md`, `use-cases.puml` | **Draft complete** |
-| All US-01–US-13 architecture traceability | Section 2 of this document | **Draft mapped, 13/13** |
-| NFR-01–15 design mapping | Section 4 | **Draft mapped, 15/15**; execution **Not Run** |
-| Formal final SRS consistency | Final Sprint 2 SRS not supplied at baseline | **Pending SRS** |
-| Runtime correctness and performance | QA tests all Not Run, implementation not inspected | **Not Verified** |
-| GitHub Issue, PR and peer approval | No new GitHub changes made for these deliverables | **Pending team workflow** |
+| **Editorial** | FR-08 now received; insert the supplied Must Have content as §3.8 in canonical SRS and remove duplicated §3.7 | Deniz (PO) |
+| **Critical** | Owner ID/phone vs email login/account contract | PO + API/backend |
+| **Critical** | Owner-only available intervals vs public calendar; block precedence | PO + API/backend/security |
+| **Critical** | Appointment override warning handshake, statuses, notices, DB atomicity | PO + API/backend |
+| **High** | Reminder read state vs completion, SRS status enum | PO + API/QA |
+| **High** | Clinical **soft-delete and restore**, visibility, auditing and retention | PO + API/backend |
+| **High** | New US-14 account status API and P2 release priority | PO + UI/API |
+| **Medium** | Account/pet date accuracy, microchip and life-stage schemas | API/backend |
+| **Medium** | SRS-selected Django/MySQL vs superseded DevOps “Django or FastAPI” text; align documentation | Technical lead/DevOps |
 
-### 6.1 Acceptance checklist for architect PR
+### Gate status
+- [x] Updated 69-page SRS, Section 5.2 supplement and newly received **FR-08** slides reviewed against GitHub OpenAPI v0.6.3.
+- [x] C4 L1–3, UML Use Case/Class/Sequence/State updated to **target** requirements with conflicts clearly labeled.
+- [x] Separate proposed API changes and detailed issue ledger provided.
+- [x] Team-owned API YAML, SRS, NFR, UI assets, CI/CD plans untouched.
+- [ ] PO incorporates supplied FR-08 into canonical §3.8, fixes repeated §3.7 and confirms remaining open interface policy details.
+- [ ] API owner publishes a revised, validated OpenAPI contract.
+- [ ] Team approves Django/MySQL physical design, soft-delete behavior, permission boundaries and scheduling atomicity.
+- [ ] QA executes acceptance tests; peer reviews and merges PR.
 
-- [ ] Reconfirm `develop` HEAD and OpenAPI before creating PR.
-- [ ] Ask repository owner whether `docs/architecture/` + `docs/uml-diagrams/` is accepted.
-- [ ] Confirm final Django/FastAPI and calendar precedence decisions, then synchronize diagrams.
-- [ ] Read Deniz's committed Sprint 2 SRS and capture a final consistency pass/diff.
-- [ ] Keep QA and UI deliverables untouched; review comments may point to issues, not overwrite their files.
-- [ ] Submit the architect-owned files from a **feature branch from `develop`** with linked issue and review.
-
-## 7. Traceable source links (repository)
-
-- [Current OpenAPI v0.6.3](https://github.com/HUARGE/Pawthy/blob/develop/api/openapi.yaml)
-- [Sprint 1 Project Foundation (13-story source)](https://github.com/HUARGE/Pawthy/blob/develop/docs/sprint-reports/Pawthy_Sprint1_Team10-1.md)
-- [Original Context Diagram](https://github.com/HUARGE/Pawthy/blob/develop/docs/architecture/system-context-diagram.png)
-- [Draft CI/CD Plan](https://github.com/HUARGE/Pawthy/blob/develop/docs/devops/ci-cd-plan.md)
-- [Contribution and Branch Rules](https://github.com/HUARGE/Pawthy/blob/develop/CONTRIBUTING.md)
-
-**Conclusion:** The **proposed** C4 and UML models are traceable to the **current** Sprint 1 working requirements and OpenAPI v0.6.3. The review **does not assert formal SRS sign-off or functioning software**; those outcomes require Deniz's Sprint 2 SRS, teammate architecture decisions, implementation and actual QA evidence.
+**Conclusion:** Architecture/UML designs have been **reconciled as proposals** with the updated 20 November SRSs. The published v0.6.3 contract still contains **substantive contradictions**. Treat the associated PR as **documentation for review**, not an API-compliant implementation.

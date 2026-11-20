@@ -1,37 +1,48 @@
-# Pawthy — Sprint 2 Architecture Deliverable Index
+# Pawthy — Sprint 2 Architecture Deliverable Index (SRS Update)
 
 **Owner:** Efe (Software Architect / Technical Lead)  
-**Date:** 19 November 2026  
-**Base:** `HUARGE/Pawthy` / `develop` (`a5c08a8534c8e6512f6621628bf751b434977d83`)  
-**Contract:** `api/openapi.yaml` — OpenAPI 3.1.0, API `0.6.3`  
-**Review state:** Complete first-review architecture documentation; formal Sprint 2 SRS conformity **pending** until the PO's finalized SRS is available. No code implementation or QA execution is claimed.
+**Reconciled:** 20 November 2026  
+**Head:** `Efesen10/Pawthy:feature/sprint2-srs-20261120-sync`; **PR target:** `HUARGE/Pawthy:develop`  
+**Live API baseline:** `api/openapi.yaml` — OpenAPI 3.1.0, `info.version: 0.6.3`  
+**New source evidence:** Deniz's 69-page Functional Requirements SRS + 5-page Section 5.2 Software Interfaces supplement + separately supplied **FR-08 Must Have** screenshot screenshots starting on slide 31/222 (shared externally; not committed as SRS files).  
+**Review state:** Updated architect-owned **design proposal**; API spec remains inconsistent until PO/API owners reconcile, version and QA test. No code has been implemented by these documents.
 
-## Files prepared by the architecture owner
+## 1. Architect-owned files in this follow-up
 
-| Deliverable | File | Content |
+| Deliverable | Path | Contents |
 |---|---|---|
-| C4 Level 1, 2 and 3 | [C4 architecture](c4-architecture.md) | Context, Container and Backend Component views, trust boundaries and design decisions |
-| UML views | [UML diagrams](../uml-diagrams/uml-diagrams.md) | 1 use-case overview, 2 class diagrams, 4 sequences and 2 state machines |
-| Formal UML use-case source | [PlantUML use cases](../uml-diagrams/use-cases.puml) | Actor-to-use-case relations covering US-01–US-13 |
-| API & requirements analysis | [Architecture alignment](api-srs-alignment.md) | 13/13 story-to-contract traces, 15/15 NFR architecture checks, issues A-01–A-11 and review gates |
+| C4 Level 1, 2, 3 | [C4 Architecture](c4-architecture.md) | Updated actors/containers/components, SRS-selected Django/MySQL, guided tour, notifications, private owner calendar, record soft-delete/restore |
+| UML design | [UML Diagrams](../uml-diagrams/uml-diagrams.md) | Use Case, two Class, **six Sequences including confirmed FR-08 owner records**, three State diagrams |
+| Formal Use Case source | [PlantUML](../uml-diagrams/use-cases.puml) | Explicit vet vs owner rights, US-14 tour, **confirmed FR-08 owner-only clinical reads** |
+| Architecture/API/SRS traceability | [Alignment Review](api-srs-alignment.md) | All 14 story definitions, including separately received FR-08; API discrepancies and NFR design mapping |
+| Full issue ledger | [SRS 20 Nov Review](srs-2026-11-20-review.md) | Detailed requirement IDs, permissions, conflicts, necessary PO decisions and supplementary 5.2 SI-01–SI-07 |
+| API-owner proposal **only** | [Suggested API Delta](../../api/srs-sync-proposal-2026-11-20.md) | Current 0.6.3 vs proposed owner phone/ID login, clinical restore, calendar, appointments, reminders, US-14; candidate URLs expressly not normative |
 
-## Confirmed scope (not implementation claims)
+## 2. SRS system boundaries now clarified
 
-- **Frontend:** HTML/CSS/vanilla JavaScript per team conversation; not React.
-- **Appointment booking:** By phone/in person only; veterinarian enters confirmed appointment in Pawthy. Owner's calendar view is read-only and privacy-safe. No online owner request or approval workflow.
-- **User scope:** One clinic, one veterinarian/administrator and multiple pet owners. Public visitors can read the clinic contact and availability view without authentication.
-- **Protected data:** Owner-authored diary vs veterinarian-authored clinical data; other owners' private records are inaccessible.
-- **Architecture stack:** Python REST API, MySQL and role-protected photo storage are logical/proposed views; backend framework and persistence details require team approval.
-- **Non-functional criteria:** Sıla's 15 NFRs and 24 scenarios are reviewed for architectural implications; the performance, reliability, privacy and security tests were documented but **not run**.
+- Technology selected in the five-page SRS supplement: **HTML/CSS/JavaScript frontend**, **Python/Django backend**, **MySQL database**, **OpenAPI/YAML specification**. MySQL must be accessed **via the backend only**, with server-side validation, authorization and referential integrity.
+- **Soft deletion and restoration** required for clinical-record lifecycle; restoration must preserve independent vaccination and owner diary records. Archive, ordinary modification and deceased state must not be confused with deletion.
+- New **US-14 Optional Guided Tour** is P2/Should Have, **not a mandatory initial Sprint 3 MVP feature**. State is per owner account; four steps and Help replay are documented.
+- Vet only creates appointments after phone/in-person agreement. Hard appointment overlaps are rejected even if hours are overridden. Out-of-hours/unavailable intervals require **explicit vet warning confirmation**; successful override does not unlock adjacent hours.
+- Owner can only view **available** weekly times and own appointment information (read-only), never other owners' records or private vet scheduling information.
+- Public clinic contact remains; whether the existing *public BUSY/CLOSED* calendar endpoint remains available is **open for PO/API decision**.
+- Vaccination read status and clinical completion are independent. Deceased pet suppresses reminders while retaining history; owner archiving hides personal active reminders but should not hide vet monitoring.
 
-## Pending external decisions / next review
+## 3. Critical unresolved decisions
 
-1. **SRS:** Compare Deniz's Sprint 2 SRS with the final C4/UML and OpenAPI; record result in `api-srs-alignment.md`. Until then SRS sign-off is **Pending**, not Pass.
-2. **Backend:** Confirm Django versus FastAPI and record the decision through the team's ADR process.
-3. **Calendar:** Resolve precedence/duplication between `/busy-times` and `/availability/blocks`.
-4. **Security/concurrency:** Agree on secure media delivery, token invalidation mechanism, and atomic scheduling write strategy.
-5. **Review:** Obtain team feedback; update only architecture-owned files before approval/merge.
+1. **PO editorial only:** **FR-08 View Veterinary Clinical Records (Must Have)** is now supplied in separate slides (7 FRs, 8 ACs). Update the 69-page SRS PDF by replacing duplicate §3.7 with its §3.8; owner-view behavior is **no longer provisional**.
+2. **API owner:** Current 0.6.3 requires email, lacks required owner phone/Owner ID login, chip/DOB/life-stage fields, clinical restore, reminder mark-read, Guided Tour, appointment notices/Completed state and hours override.
+3. **PO + security/API:** Decide whether weekly owner-only AVAILABLE calendar should replace public BUSY/CLOSED or coexist as a separately scoped API view.
+4. **Backend:** Design atomic conflict checking, exception warning ACK, protected media authorization, owner/pet relationships and clinical soft-delete/restore audit and retention policies.
+5. **QA:** Revise baseline v0.6.3 tests to conform to approved SRS/API changes. No tests executed or claimed passed.
 
-## Documentation-only submission policy
+## 4. Submission policy
 
-This submission **does not** edit the PO's Product Backlog or SRS, QA's NFR/test files, UI/Figma assets, CI/CD plans or release settings. It introduces **no application code**. Models are intended for design review and may change with the implementation team's decisions.
+This branch edits **only architect-owned documents and adds a nonnormative API proposal Markdown file**. It does not change `api/openapi.yaml`, `non-functional-requirements.md`, `test-scenarios.md`, teammate SRS source, frontend, CI/CD code or runtime application files.
+
+- [x] New 69-page + supplementary 5-page SRS evidence incorporated.
+- [x] C4 and UML updated and API discrepancies documented rather than hidden.
+- [x] FR-08 source content received and integrated into UML/C4/API traceability; canonical PDF insertion remains a PO editorial task.
+- [ ] Product Owner and API owner confirm final contract decisions.
+- [ ] Diagram rendering/compilation and runtime/QA tests (not executed).
+- [ ] PR reviewer approval and merge.
