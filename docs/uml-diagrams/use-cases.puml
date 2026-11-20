@@ -1,0 +1,64 @@
+@startuml Pawthy_Use_Cases_Sprint2
+left to right direction
+skinparam packageStyle rectangle
+skinparam usecaseBorderColor #45676A
+skinparam actorBorderColor #333333
+
+actor "Pet Owner" as Owner
+actor "Veterinarian / Administrator" as Vet
+actor "Public Visitor" as Public
+
+rectangle "Pawthy Pet Health Portal" {
+ usecase "US-01 Create Owner Accounts" as UC01
+ usecase "US-02 First Login and Password Change" as UC02
+ usecase "US-03 Enforce Role and Ownership Access" as UC03
+ usecase "US-04 Manage Pet Profiles" as UC04
+ usecase "US-05 Record Health Observations" as UC05
+ usecase "US-06 Review Diary History" as UC06
+ usecase "US-07 Manage Veterinary Medical Records" as UC07
+ usecase "US-08 View Medical Records" as UC08
+ usecase "US-09 Manage Vaccination Information" as UC09
+ usecase "US-10 View Vaccination Reminders" as UC10
+ usecase "US-11 Manage / View Availability" as UC11
+ usecase "US-12 Manage Manual Appointments" as UC12
+ usecase "US-13 Switch Light / Dark Theme" as UC13
+ usecase "View Public Calendar / Clinic Phone" as UCP
+}
+
+Vet -- UC01
+Vet -- UC02
+Owner -- UC02
+Vet -- UC03
+Owner -- UC03
+Vet -- UC04
+Owner -- UC04
+Owner -- UC05
+Owner -- UC06
+Vet -- UC06
+Vet -- UC07
+Owner -- UC08
+Vet -- UC08
+Vet -- UC09
+Owner -- UC10
+Vet -- UC10
+Vet -- UC11
+Vet -- UC12
+Owner -- UC13
+Vet -- UC13
+Public -- UCP
+Owner -- UCP
+Vet -- UCP
+
+note right of UC11
+Vet manages weekly hours and blocks.
+Owner/public only views privacy-safe calendar.
+end note
+note right of UC12
+No owner-initiated online booking.
+Appointments are agreed by phone or in person.
+end note
+note bottom of UC03
+Cross-cutting authorization rule,
+not a separate interface page.
+end note
+@enduml
